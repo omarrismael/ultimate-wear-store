@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 720" fill="none">
+  <rect width="600" height="720" fill="#09090B"/>
+  <rect x="24" y="24" width="552" height="672" rx="28" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="1.5"/>
+  <!-- Boxy Cropped Silhouette -->
+  <path d="M228 175C238 118 362 118 372 175L388 220C345 236 255 236 212 220L228 175Z" fill="#09090B" stroke="#FFFFFF" stroke-width="3"/>
+  <path d="M212 220L106 270L68 465L132 480L172 324L178 548H422L428 324L468 480L532 465L494 270L388 220" fill="#09090B" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M224 405H376L392 505H208L224 405Z" stroke="#D4AF37" stroke-width="2"/>
+  <circle cx="300" cy="316" r="34" stroke="#D4AF37" stroke-width="2" stroke-dasharray="6 4"/>
+  <circle cx="300" cy="316" r="14" fill="#D4AF37"/>
+  <text x="300" y="638" text-anchor="middle" fill="#FFFFFF" font-family="sans-serif" font-size="18" font-weight="700" letter-spacing="6">ULTIMATE</text>
+  <text x="300" y="664" text-anchor="middle" fill="#D4AF37" font-family="sans-serif" font-size="11" letter-spacing="4">ECLIPSE BOXY · 500GSM</text>
+</svg>

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200" fill="none">
+  <!-- Orbital Swoosh -->
+  <path
+    d="M46 138 C165 178, 390 170, 566 112"
+    stroke="#FFFFFF"
+    stroke-width="8.5"
+    stroke-linecap="round"
+  />
+  <!-- 4-Point Sparkle Star -->
+  <path
+    d="M526 30 L533 50 L554 57 L533 64 L526 84 L519 64 L498 57 L519 50 Z"
+    fill="#FFFFFF"
+  />
+  <!-- Stylized Italic Wordmark "ultimate" rendered as crisp geometric stroke/fill vector -->
+  <g transform="matrix(1, 0, -0.22, 1, 78, 126)">
+    <text
+      x="0"
+      y="0"
+      fill="#FFFFFF"
+      font-family="Arial Black, Impact, system-ui, sans-serif"
+      font-size="94"
+      font-weight="900"
+      letter-spacing="-3"
+    >
+      ultimate
+    </text>
+  </g>
+</svg>
