@@ -38,14 +38,16 @@ export async function requireAdminApi() {
   if (!userId) {
     return {
       supabase,
+      userId: null,
       error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     };
   }
   if (!isAdmin) {
     return {
       supabase,
+      userId,
       error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
     };
   }
-  return { supabase, error: null };
+  return { supabase, userId, error: null };
 }

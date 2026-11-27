@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -26,6 +26,7 @@ import HoldButton from "@/components/react-bits/HoldButton";
 const ALLOWED_MIME = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
 const ALLOWED_EXT = new Set(["jpg", "jpeg", "png", "webp"]);
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
+const CHECKOUT_DRAFT_KEY = "ultimate_checkout_delivery_v1";
 
 export function CheckoutClient() {
   const { locale, t } = useI18n();
@@ -33,10 +34,49 @@ export function CheckoutClient() {
   const { items, subtotal, clearCart } = useCart();
   const { user, profile, loading: authLoading, openAuthModal } = useAuth();
   const formRef = useRef<HTMLFormElement | null>(null);
+  const draftHydratedRef = useRef(false);
 
   const [city, setCity] = useState("");
   const [shippingAddress, setShippingAddress] = useState("");
   const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(CHECKOUT_DRAFT_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as {
+          city?: string;
+          shippingAddress?: string;
+          notes?: string;
+        };
+        if (typeof saved.city === "string") setCity(saved.city);
+        if (typeof saved.shippingAddress === "string") {
+          setShippingAddress(saved.shippingAddress);
+        }
+        if (typeof saved.notes === "string") setNotes(saved.notes);
+      }
+    } catch {
+      // Ignore storage access errors
+    } finally {
+      draftHydratedRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!draftHydratedRef.current) return;
+    try {
+      if (!city && !shippingAddress && !notes) {
+        window.sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
+      } else {
+        window.sessionStorage.setItem(
+          CHECKOUT_DRAFT_KEY,
+          JSON.stringify({ city, shippingAddress, notes })
+        );
+      }
+    } catch {
+      // Ignore storage access errors
+    }
+  }, [city, shippingAddress, notes]);
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>("vodafone_cash");
   const [senderPhone, setSenderPhone] = useState("");
@@ -207,6 +247,11 @@ export function CheckoutClient() {
         }
       }
 
+      try {
+        window.sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
+      } catch {
+        // Ignore storage access errors
+      }
       clearCart();
       setCompletedOrderCode(data.order?.order_code || "ULTIMATE");
     } catch {

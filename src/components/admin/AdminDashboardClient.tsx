@@ -34,6 +34,7 @@ import {
   type ProductFormState,
 } from "./ProductEditorModal";
 import { SectionsManagerTab } from "./SectionsManagerTab";
+import { SalesAnalyticsTab } from "./SalesAnalyticsTab";
 
 const EMPTY_FORM: ProductFormState = {
   title_en: "",
@@ -71,9 +72,9 @@ export function AdminDashboardClient({
 }) {
   const { locale, t } = useI18n();
 
-  const [tab, setTab] = useState<"products" | "sections" | "orders">(
-    "products"
-  );
+  const [tab, setTab] = useState<
+    "products" | "sections" | "orders" | "analytics"
+  >("products");
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [sections, setSections] = useState<StoreSection[]>(initialSections);
   const [settings, setSettings] = useState<StoreSettings>(initialSettings);
@@ -399,6 +400,17 @@ export function AdminDashboardClient({
             }`}
           >
             {t.admin.tabs.orders}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("analytics")}
+            className={`rounded-xl border px-4 py-2 text-xs font-semibold transition-colors sm:px-5 ${
+              tab === "analytics"
+                ? "border-[#D4AF37] bg-[#D4AF37] text-[#09090B]"
+                : "border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-[#D4AF37]"
+            }`}
+          >
+            {t.admin.tabs.analytics}
           </button>
         </div>
 
@@ -769,6 +781,8 @@ export function AdminDashboardClient({
             )}
           </div>
         )}
+        {/* Sales & AI Insights Tab */}
+        {tab === "analytics" && <SalesAnalyticsTab />}
       </main>
 
       <ProductEditorModal

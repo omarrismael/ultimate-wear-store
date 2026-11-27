@@ -78,7 +78,7 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
   hero_badge_en: "DROP 01",
   hero_badge_ar: "DROP 01",
   hero_headline_en: "WORN BY THE FEW.",
-  hero_headline_ar: "للقِلّة فقط.",
+  hero_headline_ar: "القلّة فقط.",
   hero_subheadline_en: "Heavyweight presence. Zero noise.",
   hero_subheadline_ar: "حضور ثقيل. تفاصيل تتكلم بصمت.",
   featured_title_en: "FEATURED DROP",

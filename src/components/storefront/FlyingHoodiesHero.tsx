@@ -27,7 +27,7 @@ interface FlyingHoodiesHeroProps {
 const ORBIT_LAYOUTS = [
   {
     stageClass:
-      "left-[1%] top-[2%] w-[104px] min-[390px]:w-[116px] sm:left-[3%] sm:top-[3%] sm:w-[144px] md:left-[6%] md:w-[162px] lg:left-[2%] lg:top-[3%] lg:w-[138px] xl:left-[5%] xl:top-[5%] xl:w-[162px] 2xl:left-[12%] 2xl:top-[6%] 2xl:w-[192px]",
+      "start-[1%] top-[1%] w-[100px] min-[390px]:w-[112px] sm:start-[2%] sm:top-[2%] sm:w-[144px] md:start-[4%] md:w-[154px] lg:start-[2%] lg:top-[3%] lg:w-[138px] xl:start-[5%] xl:top-[5%] xl:w-[162px] 2xl:start-[11%] 2xl:top-[6%] 2xl:w-[188px]",
     baseTilt: -4,
     pxFactor: 22,
     pyFactor: 18,
@@ -36,7 +36,7 @@ const ORBIT_LAYOUTS = [
   },
   {
     stageClass:
-      "right-[1%] top-[2%] w-[104px] min-[390px]:w-[116px] sm:right-[3%] sm:top-[3%] sm:w-[144px] md:right-[6%] md:w-[162px] lg:right-[20%] lg:top-[3%] lg:w-[136px] xl:right-[19%] xl:top-[5%] xl:w-[160px] 2xl:right-[17%] 2xl:top-[6%] 2xl:w-[190px]",
+      "end-[1%] top-[1%] w-[100px] min-[390px]:w-[112px] sm:end-[2%] sm:top-[2%] sm:w-[144px] md:end-[4%] md:w-[154px] lg:end-[198px] lg:top-[3%] lg:w-[136px] xl:end-[216px] xl:top-[5%] xl:w-[160px] 2xl:end-[240px] 2xl:top-[6%] 2xl:w-[188px]",
     baseTilt: 4,
     pxFactor: -24,
     pyFactor: 16,
@@ -45,7 +45,7 @@ const ORBIT_LAYOUTS = [
   },
   {
     stageClass:
-      "bottom-[2%] left-[2%] w-[104px] min-[390px]:w-[114px] sm:bottom-[3%] sm:left-[4%] sm:w-[142px] md:left-[7%] md:w-[160px] lg:bottom-[3%] lg:left-[4%] lg:w-[136px] xl:bottom-[5%] xl:left-[7%] xl:w-[160px] 2xl:left-[14%] 2xl:bottom-[6%] 2xl:w-[188px]",
+      "bottom-[1%] start-[1%] w-[100px] min-[390px]:w-[112px] sm:bottom-[2%] sm:start-[2%] sm:w-[142px] md:start-[4%] md:w-[154px] lg:bottom-[3%] lg:start-[3%] lg:w-[136px] xl:bottom-[5%] xl:start-[6%] xl:w-[160px] 2xl:start-[12%] 2xl:bottom-[6%] 2xl:w-[186px]",
     baseTilt: 3.5,
     pxFactor: 20,
     pyFactor: -20,
@@ -54,7 +54,7 @@ const ORBIT_LAYOUTS = [
   },
   {
     stageClass:
-      "bottom-[2%] right-[2%] w-[104px] min-[390px]:w-[114px] sm:bottom-[3%] sm:right-[4%] sm:w-[142px] md:right-[7%] md:w-[160px] lg:bottom-[3%] lg:right-[20%] lg:w-[142px] xl:bottom-[5%] xl:right-[19%] xl:w-[166px] 2xl:right-[17%] 2xl:bottom-[6%] 2xl:w-[198px]",
+      "bottom-[1%] end-[1%] w-[100px] min-[390px]:w-[112px] sm:bottom-[2%] sm:end-[2%] sm:w-[142px] md:end-[4%] md:w-[154px] lg:bottom-[3%] lg:end-[198px] lg:w-[140px] xl:bottom-[5%] xl:end-[216px] xl:w-[164px] 2xl:end-[240px] 2xl:bottom-[6%] 2xl:w-[192px]",
     baseTilt: -3.5,
     pxFactor: -26,
     pyFactor: -18,
@@ -231,7 +231,7 @@ export function FlyingHoodiesHero({
       ref={stageRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      className="bg-editorial-grid relative overflow-hidden border-b border-[var(--border-subtle)] transition-colors duration-300"
+      className="bg-editorial-grid relative overflow-x-clip overflow-y-hidden border-b border-[var(--border-subtle)] transition-colors duration-300"
     >
       {/* Subtle Curved Architectural Perspective Grid Overlay */}
       <svg
@@ -283,7 +283,7 @@ export function FlyingHoodiesHero({
         {/* Center Spatial Stage: Orbiting Hoodie Cards surrounding Suspended Model across Mobile, Tablet, and Laptop */}
         <div className="relative my-1.5 flex flex-1 flex-col items-center justify-center sm:my-2 lg:my-0">
           {/* Spatial Orbit Area */}
-          <div className="relative flex min-h-[370px] w-full flex-1 items-center justify-center min-[390px]:min-h-[405px] sm:min-h-[470px] md:min-h-[520px] lg:min-h-0">
+          <div className="relative flex min-h-[430px] w-full flex-1 items-center justify-center min-[390px]:min-h-[450px] sm:min-h-[500px] md:min-h-[540px] lg:min-h-0">
             {/* CENTER ZERO-GRAVITY MODEL */}
             <div
               className={`relative z-20 flex items-center justify-center transition-all duration-300 ${
@@ -302,7 +302,7 @@ export function FlyingHoodiesHero({
               />
 
               <div ref={modelWrapRef} className="will-change-transform">
-                <div className="animate-zero-gravity relative aspect-[5/8] h-[clamp(195px,36dvh,255px)] min-[390px]:h-[clamp(215px,38dvh,280px)] sm:h-[clamp(260px,42dvh,340px)] md:h-[clamp(290px,46dvh,380px)] lg:h-[clamp(300px,56dvh,450px)] xl:h-[clamp(340px,60dvh,500px)]">
+                <div className="animate-zero-gravity relative aspect-[5/8] h-[clamp(185px,32dvh,235px)] min-[390px]:h-[clamp(205px,35dvh,260px)] sm:h-[clamp(250px,40dvh,325px)] md:h-[clamp(285px,44dvh,360px)] lg:h-[clamp(300px,56dvh,450px)] xl:h-[clamp(340px,60dvh,500px)]">
                   <Image
                     src="/images/hero/zero-gravity-model.png"
                     alt="ULTIMATE"
@@ -386,11 +386,11 @@ export function FlyingHoodiesHero({
                       )}
                     </div>
 
-                    <div className="mt-1 flex items-baseline justify-between gap-1 px-0.5 pb-0.5 sm:mt-1.5 sm:gap-2 sm:px-1">
-                      <span className="font-display truncate text-[8.5px] font-bold uppercase text-[var(--text-primary)] group-hover:text-[#D4AF37] min-[400px]:text-[9.5px] sm:text-[11px]">
+                    <div className="mt-1 flex flex-col gap-0.5 px-0.5 pb-0.5 sm:mt-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-1.5 sm:px-1">
+                      <span className="font-display line-clamp-2 text-start text-[8.5px] font-bold uppercase leading-[1.15] text-[var(--text-primary)] group-hover:text-[#D4AF37] min-[390px]:text-[9.5px] sm:text-[10.5px] lg:text-[11px]">
                         {title}
                       </span>
-                      <span className="shrink-0 font-mono text-[8.5px] font-bold text-[var(--accent-gold-ink)] min-[400px]:text-[9px] sm:text-[10px]">
+                      <span className="shrink-0 font-mono text-[8.5px] font-bold text-[var(--accent-gold-ink)] min-[390px]:text-[9px] sm:text-[10px]">
                         {product.price_egp}
                       </span>
                     </div>
@@ -400,9 +400,9 @@ export function FlyingHoodiesHero({
             })}
           </div>
 
-          {/* RIGHT COMPACT MENU (Desktop spatial hover navigator; on mobile #shop filter bar sits right below to avoid duplicate lists) */}
+          {/* RIGHT COMPACT MENU (Desktop spatial hover navigator; logical end-1 avoids RTL overlap with Card 01) */}
           <aside
-            className={`hidden lg:block lg:absolute lg:end-0 lg:top-1/2 lg:z-30 lg:mt-0 lg:w-44 lg:-translate-y-1/2 lg:rounded-2xl lg:border lg:border-[var(--border-subtle)] lg:bg-[var(--bg-glass)] lg:p-3.5 lg:backdrop-blur-md lg:transition-all lg:duration-300 ${
+            className={`hidden lg:block lg:absolute lg:end-1 lg:top-1/2 lg:z-30 lg:mt-0 lg:w-44 lg:-translate-y-1/2 lg:rounded-2xl lg:border lg:border-[var(--border-subtle)] lg:bg-[var(--bg-glass)] lg:p-3.5 lg:backdrop-blur-md lg:transition-all lg:duration-300 ${
               hoveredHeroId ? "lg:blur-[2.5px] lg:opacity-55" : ""
             }`}
           >

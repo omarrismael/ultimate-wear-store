@@ -86,6 +86,11 @@ export async function getStoreConfig(supabase: SupabaseClient): Promise<{
 
   sections = [...sections].sort((a, b) => a.sort_order - b.sort_order);
 
+  // Normalize legacy Arabic hero typo if stored in database/local overrides
+  if (settings.hero_headline_ar === "اللقلة فقط." || settings.hero_headline_ar === "للقِلّة فقط.") {
+    settings = { ...settings, hero_headline_ar: "القلّة فقط." };
+  }
+
   return { sections, settings, syncedWithDatabase };
 }
 
