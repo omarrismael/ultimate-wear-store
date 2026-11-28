@@ -39,13 +39,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Always mirror phone + full_name into Supabase auth user_metadata so
+    // Always mirror phone + full_name + governorate into Supabase auth user_metadata so
     // profile data stays intact across sessions even if SQL grants lag behind.
     await authClient.auth
       .updateUser({
         data: {
           phone: parsed.data.phone,
           ...(parsed.data.fullName ? { full_name: parsed.data.fullName } : {}),
+          ...(parsed.data.governorate
+            ? { governorate: parsed.data.governorate }
+            : {}),
         },
       })
       .catch(() => null);
@@ -71,22 +74,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { error } = existingProfile
+    const basePayload = {
+      email: user.email || "",
+      phone: parsed.data.phone,
+      ...(parsed.data.fullName ? { full_name: parsed.data.fullName } : {}),
+    };
+
+    let { error } = existingProfile
       ? await dbWriter
           .from("profiles")
           .update({
-            email: user.email || "",
-            phone: parsed.data.phone,
-            ...(parsed.data.fullName ? { full_name: parsed.data.fullName } : {}),
+            ...basePayload,
+            ...(parsed.data.governorate
+              ? { governorate: parsed.data.governorate }
+              : {}),
           })
           .eq("id", user.id)
       : await dbWriter.from("profiles").insert({
           id: user.id,
-          email: user.email || "",
-          phone: parsed.data.phone,
-          ...(parsed.data.fullName ? { full_name: parsed.data.fullName } : {}),
+          ...basePayload,
+          ...(parsed.data.governorate
+            ? { governorate: parsed.data.governorate }
+            : {}),
           is_admin: false,
         });
+
+    // Fallback if profiles.governorate column has not been migrated yet
+    if (
+      error &&
+      parsed.data.governorate &&
+      (error.code === "PGRST204" ||
+        error.code === "42703" ||
+        error.message?.includes("governorate"))
+    ) {
+      const retry = existingProfile
+        ? await dbWriter
+            .from("profiles")
+            .update(basePayload)
+            .eq("id", user.id)
+        : await dbWriter.from("profiles").insert({
+            id: user.id,
+            ...basePayload,
+            is_admin: false,
+          });
+      error = retry.error;
+    }
 
     if (error) {
       const isPermDenied =

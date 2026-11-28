@@ -45,6 +45,7 @@ const EMPTY_FORM: ProductFormState = {
   price_egp: "1850",
   compare_at_price_egp: "",
   sizes: ["S", "M", "L", "XL"],
+  size_stock: {},
   image_url: "/images/hoodies/obsidian-crest.jpg",
   colors: [],
   is_featured: false,
@@ -100,6 +101,10 @@ export function AdminDashboardClient({
   );
 
   const [lightboxReceipt, setLightboxReceipt] = useState<string | null>(null);
+  const [confirmDeleteOrderId, setConfirmDeleteOrderId] = useState<string | null>(
+    null
+  );
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -183,6 +188,7 @@ export function AdminDashboardClient({
         ? String(product.compare_at_price_egp)
         : "",
       sizes: product.sizes,
+      size_stock: product.size_stock || {},
       image_url: product.image_url,
       colors: Array.isArray(product.colors) ? product.colors : [],
       is_featured: product.is_featured,
@@ -224,6 +230,7 @@ export function AdminDashboardClient({
         price_egp: priceNum,
         compare_at_price_egp: compareNum,
         sizes: form.sizes,
+        size_stock: form.size_stock,
         image_url: form.image_url,
         colors: form.colors,
         is_featured: form.is_featured,
@@ -330,6 +337,25 @@ export function AdminDashboardClient({
     } else {
       const data = await res.json().catch(() => null);
       setActionError(data?.error || "Failed to update order status.");
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    setActionError(null);
+    setDeletingOrderId(orderId);
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setActionError(data?.error || "Failed to delete order permanently.");
+        return;
+      }
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      setConfirmDeleteOrderId(null);
+    } finally {
+      setDeletingOrderId(null);
     }
   };
 
@@ -704,8 +730,29 @@ export function AdminDashboardClient({
                           {order.total_amount} {t.shop.egp}
                         </p>
                         <p className="text-xs text-[var(--text-secondary)]">
-                          {t.orders.paymentMethod[order.payment_method]}
+                          {order.payment_mode === "full_cod" ||
+                          !order.receipt_path ||
+                          order.receipt_path.endsWith("/cod-no-receipt")
+                            ? locale === "ar"
+                              ? "100% كاش عند التوصيل"
+                              : "100% Cash on Delivery"
+                            : `${t.orders.paymentMethod[order.payment_method]} (100% Transfer)`}
                           {order.sender_phone ? ` (${order.sender_phone})` : ""}
+                        </p>
+                        <p className="font-mono mt-0.5 text-[11px] text-[var(--text-muted)]">
+                          {t.orders.paidNow}:{" "}
+                          {typeof order.paid_amount === "number"
+                            ? order.paid_amount
+                            : order.payment_mode === "full_cod"
+                              ? 0
+                              : order.total_amount}{" "}
+                          {t.shop.egp} · {t.orders.remainingCod}:{" "}
+                          {typeof order.remaining_cod_amount === "number"
+                            ? order.remaining_cod_amount
+                            : order.payment_mode === "full_cod"
+                              ? order.total_amount
+                              : 0}{" "}
+                          {t.shop.egp}
                         </p>
                       </div>
                     </div>
@@ -773,6 +820,14 @@ export function AdminDashboardClient({
                           <MessageCircle className="h-3.5 w-3.5 text-[#D4AF37]" />
                           {t.admin.whatsappCustomer}
                         </a>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteOrderId(order.id)}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-red-500/50 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/20"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {t.admin.deleteOrder}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -796,6 +851,50 @@ export function AdminDashboardClient({
         onSave={handleSaveProduct}
         onClose={() => setIsProductModalOpen(false)}
       />
+
+      {/* Permanent Order Deletion Confirmation Modal */}
+      {confirmDeleteOrderId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          onClick={() =>
+            deletingOrderId ? null : setConfirmDeleteOrderId(null)
+          }
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border border-red-500/50 bg-[var(--bg-surface)] p-6 shadow-2xl"
+          >
+            <h3 className="font-display text-lg font-extrabold uppercase text-[var(--text-primary)]">
+              {t.admin.deleteOrder}
+            </h3>
+            <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">
+              {t.admin.deleteOrderConfirm}
+            </p>
+            <div className="mt-5 flex justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={Boolean(deletingOrderId)}
+                onClick={() => setConfirmDeleteOrderId(null)}
+                className="rounded-xl border border-[var(--border-strong)] px-4 py-2 text-xs font-semibold text-[var(--text-primary)] hover:border-[#D4AF37] disabled:opacity-50"
+              >
+                {locale === "ar" ? "إلغاء" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(deletingOrderId)}
+                onClick={() => handleDeleteOrder(confirmDeleteOrderId)}
+                className="rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-500 disabled:opacity-50"
+              >
+                {deletingOrderId
+                  ? t.admin.deletingOrder
+                  : t.admin.deleteOrder}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Receipt Lightbox */}
       {lightboxReceipt && (

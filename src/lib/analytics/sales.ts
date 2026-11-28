@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OrderStatus } from "@/types";
+import { resolveGovernorate } from "@/lib/egypt-governorates";
 
 export type AnalyticsRange = "7d" | "30d" | "all";
 
@@ -66,6 +67,7 @@ interface RawOrderRow {
   total_amount: number;
   status: OrderStatus;
   city: string;
+  governorate?: string | null;
   created_at: string;
 }
 
@@ -106,7 +108,7 @@ export async function computeAdminSalesAnalytics(
   // Explicitly select only non-PII operational columns
   let ordersQuery = supabase
     .from("orders")
-    .select("id, total_amount, status, city, created_at")
+    .select("id, total_amount, status, city, governorate, created_at")
     .order("created_at", { ascending: false });
 
   const cutoff = getCutoffIso(range);
@@ -114,7 +116,23 @@ export async function computeAdminSalesAnalytics(
     ordersQuery = ordersQuery.gte("created_at", cutoff);
   }
 
-  const { data: ordersData, error: ordersErr } = await ordersQuery;
+  const initialOrdersRes = await ordersQuery;
+  let ordersData: RawOrderRow[] | null =
+    (initialOrdersRes.data as RawOrderRow[] | null) ?? null;
+  let ordersErr = initialOrdersRes.error;
+  if (
+    ordersErr &&
+    (ordersErr.code === "42703" || ordersErr.message?.includes("governorate"))
+  ) {
+    let fallbackQuery = supabase
+      .from("orders")
+      .select("id, total_amount, status, city, created_at")
+      .order("created_at", { ascending: false });
+    if (cutoff) fallbackQuery = fallbackQuery.gte("created_at", cutoff);
+    const retry = await fallbackQuery;
+    ordersData = (retry.data as RawOrderRow[] | null) ?? null;
+    ordersErr = retry.error;
+  }
   if (ordersErr) {
     throw new Error(`Failed to load orders analytics: ${ordersErr.message}`);
   }
@@ -184,8 +202,12 @@ export async function computeAdminSalesAnalytics(
       pendingRevenueEgp += amount;
     }
 
-    const cleanCity = (order.city || "Unspecified").trim() || "Unspecified";
-    const cityKey = cleanCity.toLowerCase();
+    const resolvedGov = resolveGovernorate(order.governorate || order.city);
+    const cleanCity =
+      resolvedGov?.name_en ||
+      (order.city || "Unspecified").trim() ||
+      "Unspecified";
+    const cityKey = resolvedGov?.key || cleanCity.toLowerCase();
     const existingCity = cityBuckets.get(cityKey);
     if (existingCity) {
       existingCity.ordersCount += 1;

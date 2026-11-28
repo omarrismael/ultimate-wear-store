@@ -17,12 +17,14 @@ import { getProductCarouselItems } from "@/lib/product-angles";
 
 interface QuickViewModalProps {
   product: Product | null;
+  initialColorIndex?: number;
   sections?: StoreSection[];
   onClose: () => void;
 }
 
 export function QuickViewModal({
   product,
+  initialColorIndex = 0,
   sections = [],
   onClose,
 }: QuickViewModalProps) {
@@ -57,7 +59,7 @@ export function QuickViewModal({
     if (product) {
       stopScroll();
       setActiveAngle(0);
-      setSelectedColorIdx(0);
+      setSelectedColorIdx(initialColorIndex);
       const valid =
         product.sizes.length > 0 ? product.sizes : (["M"] as ProductSize[]);
       setSize(valid.includes("L") ? "L" : valid[0]);
@@ -69,7 +71,7 @@ export function QuickViewModal({
     } else {
       startScroll();
     }
-  }, [product, stopScroll, startScroll, onClose]);
+  }, [product, initialColorIndex, stopScroll, startScroll, onClose]);
 
   const colorVariants: ProductColorVariant[] = useMemo(() => {
     if (!product || !Array.isArray(product.colors)) return [];
@@ -83,7 +85,7 @@ export function QuickViewModal({
 
   const carouselItems = useMemo(() => {
     if (!product) return [];
-    return getProductCarouselItems(product, locale, selectedColor?.image_url);
+    return getProductCarouselItems(product, locale, selectedColor);
   }, [product, locale, selectedColor]);
 
   if (!product) return null;
@@ -192,6 +194,12 @@ export function QuickViewModal({
 
             <p className="font-editorial mt-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-3.5 py-2.5 text-sm italic text-[var(--text-secondary)]">
               {t.quickView.fabricNote}
+            </p>
+            <p className="mt-2.5 text-[11px] leading-relaxed text-[var(--text-muted)]">
+              <strong className="text-[var(--accent-gold-ink)]">
+                {t.policy.title}:
+              </strong>{" "}
+              {t.policy.body} {t.policy.shippingNote}
             </p>
           </div>
 

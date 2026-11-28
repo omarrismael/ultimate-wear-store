@@ -64,6 +64,8 @@ export const passwordLoginSchema = z.object({
   password: z.string().min(1, "Password is required").max(128),
 });
 
+export const PRODUCT_SIZE_ENUM = z.enum(["S", "M", "L", "XL", "XXL", "3XL"]);
+
 export const phoneUpdateSchema = z.object({
   phone: z
     .string()
@@ -76,11 +78,17 @@ export const phoneUpdateSchema = z.object({
     .max(80)
     .transform(sanitizeText)
     .optional(),
+  governorate: z
+    .string()
+    .trim()
+    .max(60)
+    .transform(sanitizeText)
+    .optional(),
 });
 
 export const orderItemInputSchema = z.object({
   productId: z.string().uuid(),
-  size: z.enum(["S", "M", "L", "XL"]),
+  size: PRODUCT_SIZE_ENUM,
   colorName: z
     .string()
     .trim()
@@ -90,46 +98,77 @@ export const orderItemInputSchema = z.object({
   quantity: z.number().int().min(1).max(20),
 });
 
-export const createOrderSchema = z.object({
-  items: z.array(orderItemInputSchema).min(1).max(25),
-  paymentMethod: z.enum(["vodafone_cash", "instapay"]),
-  receiptPath: z
-    .string()
-    .trim()
-    .min(5)
-    .max(300)
-    .refine((val) => !val.includes("..") && !val.startsWith("/"), {
-      message: "Invalid receipt storage path",
-    }),
-  senderPhone: z
-    .string()
-    .trim()
-    .regex(EGYPT_MOBILE_REGEX)
-    .optional()
-    .or(z.literal("")),
-  transactionRef: z
-    .string()
-    .trim()
-    .max(80)
-    .transform(sanitizeText)
-    .optional()
-    .or(z.literal("")),
-  shippingAddress: z.string().trim().min(6).max(250).transform(sanitizeText),
-  city: z.string().trim().min(2).max(80).transform(sanitizeText),
-  notes: z
-    .string()
-    .trim()
-    .max(300)
-    .transform(sanitizeText)
-    .optional()
-    .or(z.literal("")),
-});
+export const createOrderSchema = z
+  .object({
+    items: z.array(orderItemInputSchema).min(1).max(25),
+    paymentMode: z.enum(["full_transfer", "full_cod"]).default("full_transfer"),
+    paymentMethod: z.enum(["vodafone_cash", "instapay"]).default("vodafone_cash"),
+    receiptPath: z
+      .string()
+      .trim()
+      .max(300)
+      .refine((val) => !val || (!val.includes("..") && !val.startsWith("/")), {
+        message: "Invalid receipt storage path",
+      })
+      .optional()
+      .nullable(),
+    senderPhone: z
+      .string()
+      .trim()
+      .regex(EGYPT_MOBILE_REGEX)
+      .optional()
+      .or(z.literal("")),
+    transactionRef: z
+      .string()
+      .trim()
+      .max(80)
+      .transform(sanitizeText)
+      .optional()
+      .or(z.literal("")),
+    governorate: z
+      .string()
+      .trim()
+      .min(2)
+      .max(60)
+      .transform(sanitizeText)
+      .optional(),
+    shippingAddress: z.string().trim().min(6).max(250).transform(sanitizeText),
+    city: z.string().trim().min(2).max(80).transform(sanitizeText),
+    notes: z
+      .string()
+      .trim()
+      .max(300)
+      .transform(sanitizeText)
+      .optional()
+      .or(z.literal("")),
+  })
+  .superRefine((data, ctx) => {
+    if (data.paymentMode === "full_transfer") {
+      if (!data.receiptPath || data.receiptPath.length < 5) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please upload your transfer receipt screenshot.",
+          path: ["receiptPath"],
+        });
+      }
+    }
+  });
 
 export const notifyOrderSchema = z.object({
   orderId: z.string().uuid(),
 });
 
 export const uuidSchema = z.string().uuid();
+
+const imagePathValidator = z
+  .string()
+  .trim()
+  .min(1)
+  .max(500)
+  .refine(
+    (url) => url.startsWith("/images/") || url.startsWith("https://"),
+    "Image URL must be a local /images/ path or https:// URL"
+  );
 
 export const colorVariantSchema = z.object({
   id: z.string().trim().min(1).max(60),
@@ -139,15 +178,11 @@ export const colorVariantSchema = z.object({
     .string()
     .trim()
     .regex(/^#[0-9A-Fa-f]{6}$/, "Color hex must look like #111114"),
-  image_url: z
-    .string()
-    .trim()
-    .min(1)
-    .max(500)
-    .refine(
-      (url) => url.startsWith("/images/") || url.startsWith("https://"),
-      "Color image URL must be a local /images/ path or https:// URL"
-    ),
+  image_url: imagePathValidator,
+  front_image_url: imagePathValidator.optional().or(z.literal("")),
+  back_image_url: imagePathValidator.optional().or(z.literal("")),
+  detail_image_url: imagePathValidator.optional().or(z.literal("")),
+  gallery_urls: z.array(imagePathValidator).max(6).optional().default([]),
 });
 
 export const sectionSlugSchema = z
@@ -167,18 +202,12 @@ export const adminProductBaseSchema = z.object({
   category: sectionSlugSchema,
   price_egp: z.number().int().min(50).max(100000),
   compare_at_price_egp: z.number().int().min(50).max(150000).nullable().optional(),
-  sizes: z.array(z.enum(["S", "M", "L", "XL"])).min(1).max(4),
-  image_url: z
-    .string()
-    .trim()
-    .min(1)
-    .max(500)
-    .refine(
-      (url) =>
-        url.startsWith("/images/") ||
-        url.startsWith("https://"),
-      "Image URL must be a local /images/ path or https:// URL"
-    ),
+  sizes: z.array(PRODUCT_SIZE_ENUM).min(1).max(6),
+  size_stock: z
+    .record(PRODUCT_SIZE_ENUM, z.number().int().min(0).max(10000))
+    .optional()
+    .nullable(),
+  image_url: imagePathValidator,
   colors: z.array(colorVariantSchema).max(12).optional().default([]),
   is_featured: z.boolean().default(false),
   in_stock: z.boolean().default(true),

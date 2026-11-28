@@ -19,7 +19,7 @@ export const VODAFONE_CASH_NUMBER =
 export const INSTAPAY_NUMBER =
   process.env.NEXT_PUBLIC_INSTAPAY_NUMBER || "01018471149";
 
-export const PRODUCT_SIZES: ProductSize[] = ["S", "M", "L", "XL"];
+export const PRODUCT_SIZES: ProductSize[] = ["S", "M", "L", "XL", "XXL", "3XL"];
 
 export const PRODUCT_CATEGORIES: ProductCategory[] = [
   "heavyweight",

@@ -54,17 +54,19 @@ export async function POST(request: NextRequest) {
       .select("*")
       .single();
 
-    // Compatibility fallback when Supabase hasn't received colors/dynamic-category migration yet
+    // Compatibility fallback when Supabase hasn't received colors/size_stock/dynamic-category migration yet
     if (
       insertErr &&
       (insertErr.code === "PGRST204" ||
         insertErr.code === "42703" ||
         insertErr.code === "23514" ||
         insertErr.message?.includes("colors") ||
+        insertErr.message?.includes("size_stock") ||
         insertErr.message?.includes("category"))
     ) {
-      const { colors, category, ...rest } = parsed.data;
+      const { colors, size_stock, category, ...rest } = parsed.data;
       void colors;
+      void size_stock;
       const safeCategory = BASE_CATEGORIES.has(category)
         ? category
         : "heavyweight";

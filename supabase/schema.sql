@@ -41,7 +41,9 @@ create table if not exists public.products (
 );
 
 -- Additive migrations for existing installations
+alter table public.profiles add column if not exists governorate text;
 alter table public.products add column if not exists colors jsonb not null default '[]'::jsonb;
+alter table public.products add column if not exists size_stock jsonb not null default '{}'::jsonb;
 alter table public.products drop constraint if exists products_category_check;
 alter table public.products add constraint products_category_check check (length(trim(category)) >= 2);
 
@@ -84,9 +86,13 @@ create table if not exists public.orders (
   shipping_address text not null,
   city text not null,
   payment_method text not null check (payment_method in ('vodafone_cash', 'instapay')),
+  payment_mode text not null default 'full_transfer' check (payment_mode in ('full_transfer', 'full_cod')),
+  paid_amount integer not null default 0 check (paid_amount >= 0),
+  remaining_cod_amount integer not null default 0 check (remaining_cod_amount >= 0),
+  governorate text,
   sender_phone text,
   transaction_ref text,
-  receipt_path text not null,
+  receipt_path text,
   total_amount integer not null check (total_amount > 0),
   status text not null default 'pending_verification'
     check (status in ('pending_verification', 'confirmed', 'shipped', 'delivered', 'cancelled')),
@@ -102,13 +108,28 @@ create table if not exists public.order_items (
   product_id uuid not null references public.products(id) on delete restrict,
   product_title_en text not null,
   product_title_ar text not null,
-  size text not null check (size in ('S', 'M', 'L', 'XL')),
+  size text not null check (size in ('S', 'M', 'L', 'XL', 'XXL', '3XL')),
   color_name text,
   quantity integer not null check (quantity > 0),
   unit_price integer not null check (unit_price > 0)
 );
 
 alter table public.order_items add column if not exists color_name text;
+alter table public.order_items drop constraint if exists order_items_size_check;
+alter table public.order_items add constraint order_items_size_check
+  check (size in ('S', 'M', 'L', 'XL', 'XXL', '3XL'));
+
+alter table public.orders add column if not exists governorate text;
+alter table public.orders add column if not exists payment_mode text not null default 'full_transfer';
+alter table public.orders add column if not exists paid_amount integer not null default 0;
+alter table public.orders add column if not exists remaining_cod_amount integer not null default 0;
+alter table public.orders alter column receipt_path drop not null;
+update public.orders
+  set payment_mode = 'full_transfer'
+  where payment_mode is null or payment_mode not in ('full_transfer', 'full_cod');
+alter table public.orders drop constraint if exists orders_payment_mode_check;
+alter table public.orders add constraint orders_payment_mode_check
+  check (payment_mode in ('full_transfer', 'full_cod'));
 alter table public.orders drop constraint if exists orders_status_check;
 alter table public.orders add constraint orders_status_check
   check (status in ('pending_verification', 'confirmed', 'shipped', 'delivered', 'cancelled'));
@@ -258,8 +279,8 @@ grant select on public.store_settings to anon, authenticated;
 grant insert, update on public.store_settings to authenticated;
 
 grant select, insert, update on public.profiles to authenticated;
-grant select, insert, update on public.orders to authenticated;
-grant select, insert on public.order_items to authenticated;
+grant select, insert, update, delete on public.orders to authenticated;
+grant select, insert, delete on public.order_items to authenticated;
 
 grant execute on function public.is_admin() to anon, authenticated;
 grant execute on function public.mark_order_telegram_notified(uuid) to authenticated;
@@ -360,7 +381,10 @@ create policy "orders_insert_own"
   with check (
     auth.uid() = user_id
     and status = 'pending_verification'
-    and receipt_path like (auth.uid()::text || '/%')
+    and (
+      payment_mode = 'full_cod'
+      or receipt_path like (auth.uid()::text || '/%')
+    )
   );
 
 drop policy if exists "orders_admin_update" on public.orders;
@@ -368,6 +392,11 @@ create policy "orders_admin_update"
   on public.orders for update
   using (public.is_admin())
   with check (public.is_admin());
+
+drop policy if exists "orders_admin_delete" on public.orders;
+create policy "orders_admin_delete"
+  on public.orders for delete
+  using (public.is_admin());
 
 -- ORDER ITEMS
 drop policy if exists "order_items_select_own_or_admin" on public.order_items;

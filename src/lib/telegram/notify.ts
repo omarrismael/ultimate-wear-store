@@ -57,22 +57,47 @@ export async function sendOrderTelegramNotification(
     )
     .join("\n");
 
-  let receiptLink = "Receipt uploaded to private storage (payment-receipts)";
-  try {
-    const { data: signedData, error: signErr } = await storageClient.storage
-      .from("payment-receipts")
-      .createSignedUrl(order.receipt_path, 60 * 60 * 24);
+  const isFullCod =
+    order.payment_mode === "full_cod" ||
+    !order.receipt_path ||
+    order.receipt_path.endsWith("/cod-no-receipt");
+  const paidNow =
+    typeof order.paid_amount === "number"
+      ? order.paid_amount
+      : isFullCod
+        ? 0
+        : order.total_amount;
+  const remainingCod =
+    typeof order.remaining_cod_amount === "number"
+      ? order.remaining_cod_amount
+      : isFullCod
+        ? order.total_amount
+        : 0;
 
-    if (signErr) {
-      console.warn(
-        `[Telegram] Could not create signed receipt URL for ${order.order_code}:`,
-        signErr.message
-      );
-    } else if (signedData?.signedUrl) {
-      receiptLink = `<a href="${escapeHtml(signedData.signedUrl)}">View Transfer Receipt (24h)</a>`;
+  const paymentModeLabel = isFullCod
+    ? "100% Cash on Delivery (Full COD)"
+    : `100% Transfer (${methodLabel})`;
+
+  let receiptLink = isFullCod
+    ? "Not required (100% Cash on Delivery)"
+    : "Receipt uploaded to private storage (payment-receipts)";
+  if (!isFullCod && order.receipt_path) {
+    try {
+      const { data: signedData, error: signErr } = await storageClient.storage
+        .from("payment-receipts")
+        .createSignedUrl(order.receipt_path, 60 * 60 * 24);
+
+      if (signErr) {
+        console.warn(
+          `[Telegram] Could not create signed receipt URL for ${order.order_code}:`,
+          signErr.message
+        );
+      } else if (signedData?.signedUrl) {
+        receiptLink = `<a href="${escapeHtml(signedData.signedUrl)}">View Transfer Receipt (24h)</a>`;
+      }
+    } catch (err) {
+      console.warn(`[Telegram] Signed URL exception for ${order.order_code}:`, err);
     }
-  } catch (err) {
-    console.warn(`[Telegram] Signed URL exception for ${order.order_code}:`, err);
   }
 
   const messageHtml = [
@@ -83,14 +108,17 @@ export async function sendOrderTelegramNotification(
     customerName ? `<b>Customer Name:</b> ${escapeHtml(customerName)}` : null,
     `<b>Customer Email:</b> ${escapeHtml(order.customer_email)}`,
     `<b>Phone / WhatsApp:</b> <code>${escapeHtml(order.customer_phone)}</code>`,
-    `<b>City:</b> ${escapeHtml(order.city)}`,
+    `<b>Governorate / City:</b> ${escapeHtml(order.city)}`,
     `<b>Address:</b> ${escapeHtml(order.shipping_address)}`,
     ``,
-    `<b>Payment:</b> ${methodLabel} (to <code>${escapeHtml(targetAccount)}</code>)`,
-    order.sender_phone
+    `<b>Payment Mode:</b> ${escapeHtml(paymentModeLabel)}`,
+    !isFullCod
+      ? `<b>Transfer Target:</b> ${methodLabel} (<code>${escapeHtml(targetAccount)}</code>)`
+      : null,
+    !isFullCod && order.sender_phone
       ? `<b>Sender Phone:</b> <code>${escapeHtml(order.sender_phone)}</code>`
       : null,
-    order.transaction_ref
+    !isFullCod && order.transaction_ref
       ? `<b>Tx Reference:</b> <code>${escapeHtml(order.transaction_ref)}</code>`
       : null,
     ``,
@@ -98,6 +126,8 @@ export async function sendOrderTelegramNotification(
     itemsLines,
     ``,
     `<b>Total Amount:</b> <b>${order.total_amount} EGP</b>`,
+    `<b>Paid Now:</b> <b>${paidNow} EGP</b>`,
+    `<b>Remaining Cash on Delivery:</b> <b>${remainingCod} EGP</b>`,
     order.notes ? `<b>Notes:</b> ${escapeHtml(order.notes)}` : null,
     `<b>Receipt:</b> ${receiptLink}`,
   ]
@@ -107,11 +137,12 @@ export async function sendOrderTelegramNotification(
   let photoSent = false;
   let photoFailureReason: string | undefined;
 
-  // 1. Download receipt image from private bucket & dispatch via sendPhoto
-  try {
-    const { data: blobData, error: dlErr } = await storageClient.storage
-      .from("payment-receipts")
-      .download(order.receipt_path);
+  // 1. Download receipt image from private bucket & dispatch via sendPhoto (skip for 100% COD)
+  if (!isFullCod && order.receipt_path) {
+    try {
+      const { data: blobData, error: dlErr } = await storageClient.storage
+        .from("payment-receipts")
+        .download(order.receipt_path);
 
     if (dlErr || !blobData) {
       photoFailureReason = dlErr?.message || "Empty receipt blob";
@@ -195,13 +226,14 @@ export async function sendOrderTelegramNotification(
         }
       }
     }
-  } catch (err) {
-    photoFailureReason =
-      err instanceof Error ? err.message : "sendPhoto request failed";
-    console.error(
-      `[Telegram] sendPhoto exception for ${order.order_code}:`,
-      photoFailureReason
-    );
+    } catch (err) {
+      photoFailureReason =
+        err instanceof Error ? err.message : "sendPhoto request failed";
+      console.error(
+        `[Telegram] sendPhoto exception for ${order.order_code}:`,
+        photoFailureReason
+      );
+    }
   }
 
   // 2. Send full HTML message (either because caption > 1024 chars, or fallback after photo issue)

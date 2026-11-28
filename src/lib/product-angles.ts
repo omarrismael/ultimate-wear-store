@@ -1,4 +1,4 @@
-import type { Product } from "@/types";
+import type { Product, ProductColorVariant } from "@/types";
 import type { CircularCarouselItem } from "@/components/react-bits/CircularCarousel";
 
 const KNOWN_ANGLE_KEYS = [
@@ -13,14 +13,69 @@ const KNOWN_ANGLE_KEYS = [
 export function getProductCarouselItems(
   product: Product,
   locale: "en" | "ar",
-  activeImageUrl?: string
+  selectedColor?: ProductColorVariant | string | null
 ): CircularCarouselItem[] {
   const title = locale === "ar" ? product.title_ar : product.title_en;
-  const primaryImage = activeImageUrl || product.image_url;
 
-  const matchedKey = KNOWN_ANGLE_KEYS.find((k) =>
-    primaryImage.includes(k)
-  );
+  const variant: ProductColorVariant | null =
+    selectedColor && typeof selectedColor === "object"
+      ? selectedColor
+      : typeof selectedColor === "string"
+        ? product.colors?.find((c) => c.image_url === selectedColor) || null
+        : null;
+
+  // 1. If the selected color variant has structured Front/Back/Detail/Gallery uploads, build directly from them
+  if (variant) {
+    const front = variant.front_image_url || variant.image_url || product.image_url;
+    const structured: CircularCarouselItem[] = [
+      {
+        src: front,
+        alt: `${title} — ${locale === "ar" ? "الأمام" : "Front"}`,
+        title: locale === "ar" ? "صورة الوش" : "Front",
+        subtitle: title,
+      },
+    ];
+
+    if (variant.back_image_url) {
+      structured.push({
+        src: variant.back_image_url,
+        alt: `${title} — ${locale === "ar" ? "الضهر" : "Back"}`,
+        title: locale === "ar" ? "صورة الضهر" : "Back",
+        subtitle: title,
+      });
+    }
+    if (variant.detail_image_url) {
+      structured.push({
+        src: variant.detail_image_url,
+        alt: `${title} — ${locale === "ar" ? "التفاصيل" : "Detail"}`,
+        title: locale === "ar" ? "تفصيلة المنتج" : "Detail",
+        subtitle: title,
+      });
+    }
+    if (Array.isArray(variant.gallery_urls)) {
+      for (const url of variant.gallery_urls) {
+        if (url) {
+          structured.push({
+            src: url,
+            alt: `${title} — Gallery`,
+            title: locale === "ar" ? "معرض" : "Gallery",
+            subtitle: title,
+          });
+        }
+      }
+    }
+
+    if (structured.length >= 2) {
+      return structured;
+    }
+  }
+
+  const primaryImage =
+    (typeof selectedColor === "string"
+      ? selectedColor
+      : variant?.front_image_url || variant?.image_url) || product.image_url;
+
+  const matchedKey = KNOWN_ANGLE_KEYS.find((k) => primaryImage.includes(k));
 
   if (matchedKey) {
     return [
@@ -51,13 +106,12 @@ export function getProductCarouselItems(
     ];
   }
 
-  // If product has multiple color skins, include them across frames too
   const skinFrames =
     product.colors
-      ?.filter((c) => c.image_url !== primaryImage)
+      ?.filter((c) => (c.front_image_url || c.image_url) !== primaryImage)
       .slice(0, 2)
       .map((c) => ({
-        src: c.image_url,
+        src: c.front_image_url || c.image_url,
         alt: `${title} — ${locale === "ar" ? c.name_ar : c.name_en}`,
         title: locale === "ar" ? c.name_ar : c.name_en,
       })) || [];

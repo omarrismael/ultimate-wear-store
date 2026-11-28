@@ -74,12 +74,27 @@ export async function GET(request: NextRequest) {
       Boolean(existingProfile?.is_admin) ||
       (user.email || "").toLowerCase() === PRIMARY_ADMIN_EMAIL;
 
-    const target =
-      next === "/" && isAdmin && searchParams.get("type") !== "recovery"
-        ? ADMIN_PORTAL_PATH
-        : next;
+    const finalName = existingProfile?.full_name || resolvedName;
+    const finalPhone = existingProfile?.phone || resolvedPhone;
+    const isRecovery =
+      searchParams.get("type") === "recovery" ||
+      next.startsWith("/reset-password");
+    const isGoogleAuth =
+      user.app_metadata?.provider === "google" ||
+      (Array.isArray(user.identities) &&
+        user.identities.some((ident) => ident.provider === "google"));
 
-    return NextResponse.redirect(`${origin}${target}`);
+    const intendedTarget =
+      next === "/" && isAdmin && !isRecovery ? ADMIN_PORTAL_PATH : next;
+
+    // Mandatory onboarding profile completion if Google OAuth user is missing Name or Phone
+    if (!isRecovery && isGoogleAuth && (!finalName || !finalPhone)) {
+      return NextResponse.redirect(
+        `${origin}/complete-profile?next=${encodeURIComponent(intendedTarget)}`
+      );
+    }
+
+    return NextResponse.redirect(`${origin}${intendedTarget}`);
   } catch (err) {
     console.error("[Auth Callback] Unexpected error:", err);
     return NextResponse.redirect(`${origin}/?authError=oauth_failed`);

@@ -62,7 +62,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          const validSizes = new Set<ProductSize>(["S", "M", "L", "XL"]);
+          const validSizes = new Set<ProductSize>([
+            "S",
+            "M",
+            "L",
+            "XL",
+            "XXL",
+            "3XL",
+          ]);
           const sanitized = parsed.filter(
             (item): item is CartItem =>
               Boolean(item) &&
@@ -168,6 +175,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             slug: product.slug,
             title_en: product.title_en,
             title_ar: product.title_ar,
+            category: product.category,
             price_egp: product.price_egp,
             image_url: itemImage,
             size,

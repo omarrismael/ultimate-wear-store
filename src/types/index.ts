@@ -1,6 +1,6 @@
 export type Locale = "en" | "ar";
 
-export type ProductSize = "S" | "M" | "L" | "XL";
+export type ProductSize = "S" | "M" | "L" | "XL" | "XXL" | "3XL";
 
 export type DefaultProductCategory =
   | "heavyweight"
@@ -15,7 +15,12 @@ export interface ProductColorVariant {
   name_en: string;
   name_ar: string;
   hex: string;
+  /** Primary / Front view image URL (kept for backwards compatibility) */
   image_url: string;
+  front_image_url?: string;
+  back_image_url?: string;
+  detail_image_url?: string;
+  gallery_urls?: string[];
 }
 
 export interface StoreSection {
@@ -46,6 +51,8 @@ export interface StoreSettings {
 
 export type PaymentMethod = "vodafone_cash" | "instapay";
 
+export type PaymentMode = "full_transfer" | "full_cod";
+
 export type OrderStatus =
   | "pending_verification"
   | "confirmed"
@@ -58,6 +65,7 @@ export interface Profile {
   email: string;
   full_name: string | null;
   phone: string | null;
+  governorate?: string | null;
   is_admin: boolean;
   created_at: string;
   updated_at: string;
@@ -74,6 +82,7 @@ export interface Product {
   price_egp: number;
   compare_at_price_egp: number | null;
   sizes: ProductSize[];
+  size_stock?: Partial<Record<ProductSize, number>> | null;
   image_url: string;
   colors?: ProductColorVariant[];
   is_featured: boolean;
@@ -87,6 +96,7 @@ export interface CartItem {
   slug: string;
   title_en: string;
   title_ar: string;
+  category?: string;
   price_egp: number;
   image_url: string;
   size: ProductSize;
@@ -116,10 +126,14 @@ export interface Order {
   customer_phone: string;
   shipping_address: string;
   city: string;
+  governorate?: string | null;
   payment_method: PaymentMethod;
+  payment_mode?: PaymentMode | null;
+  paid_amount?: number | null;
+  remaining_cod_amount?: number | null;
   sender_phone: string | null;
   transaction_ref: string | null;
-  receipt_path: string;
+  receipt_path: string | null;
   receipt_signed_url?: string | null;
   total_amount: number;
   status: OrderStatus;

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
+  Banknote,
   Check,
   CheckCircle2,
   Copy,
@@ -11,16 +12,18 @@ import {
   Smartphone,
   Upload,
 } from "lucide-react";
-import type { PaymentMethod } from "@/types";
+import type { PaymentMethod, PaymentMode } from "@/types";
 import { useI18n } from "@/lib/i18n/context";
 import { useCart } from "@/components/providers/CartProvider";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { INSTAPAY_NUMBER, VODAFONE_CASH_NUMBER } from "@/lib/constants";
 import { EGYPT_MOBILE_REGEX } from "@/lib/security/validation";
+import { getGovernorateLabel } from "@/lib/egypt-governorates";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ElectricLoader } from "@/components/brand/ElectricLoader";
+import { GovernorateSelector } from "@/components/checkout/GovernorateSelector";
 import HoldButton from "@/components/react-bits/HoldButton";
 
 const ALLOWED_MIME = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
@@ -36,7 +39,7 @@ export function CheckoutClient() {
   const formRef = useRef<HTMLFormElement | null>(null);
   const draftHydratedRef = useRef(false);
 
-  const [city, setCity] = useState("");
+  const [governorate, setGovernorate] = useState("");
   const [shippingAddress, setShippingAddress] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -45,11 +48,16 @@ export function CheckoutClient() {
       const raw = window.sessionStorage.getItem(CHECKOUT_DRAFT_KEY);
       if (raw) {
         const saved = JSON.parse(raw) as {
+          governorate?: string;
           city?: string;
           shippingAddress?: string;
           notes?: string;
         };
-        if (typeof saved.city === "string") setCity(saved.city);
+        if (typeof saved.governorate === "string") {
+          setGovernorate(saved.governorate);
+        } else if (typeof saved.city === "string") {
+          setGovernorate(saved.city);
+        }
         if (typeof saved.shippingAddress === "string") {
           setShippingAddress(saved.shippingAddress);
         }
@@ -63,20 +71,29 @@ export function CheckoutClient() {
   }, []);
 
   useEffect(() => {
+    if (!governorate && profile?.governorate) {
+      setGovernorate(profile.governorate);
+    }
+  }, [governorate, profile?.governorate]);
+
+  useEffect(() => {
     if (!draftHydratedRef.current) return;
     try {
-      if (!city && !shippingAddress && !notes) {
+      if (!governorate && !shippingAddress && !notes) {
         window.sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
       } else {
         window.sessionStorage.setItem(
           CHECKOUT_DRAFT_KEY,
-          JSON.stringify({ city, shippingAddress, notes })
+          JSON.stringify({ governorate, shippingAddress, notes })
         );
       }
     } catch {
       // Ignore storage access errors
     }
-  }, [city, shippingAddress, notes]);
+  }, [governorate, shippingAddress, notes]);
+
+  const [paymentMode, setPaymentMode] =
+    useState<PaymentMode>("full_transfer");
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>("vodafone_cash");
   const [senderPhone, setSenderPhone] = useState("");
@@ -91,7 +108,16 @@ export function CheckoutClient() {
     null
   );
 
-  const isVerifiedProfile = Boolean(user && user.email_confirmed_at && profile?.phone);
+  const isTransferMode = paymentMode === "full_transfer";
+  const paidNowAmount = isTransferMode ? subtotal : 0;
+  const remainingCodAmount = isTransferMode ? 0 : subtotal;
+
+  const isVerifiedProfile = Boolean(
+    user && user.email_confirmed_at && profile?.phone && profile?.full_name
+  );
+  const needsProfileCompletion = Boolean(
+    user && user.email_confirmed_at && (!profile?.phone || !profile?.full_name)
+  );
 
   const activeTargetNumber =
     paymentMethod === "vodafone_cash" ? VODAFONE_CASH_NUMBER : INSTAPAY_NUMBER;
@@ -175,21 +201,40 @@ export function CheckoutClient() {
   const validateBeforeSubmit = (): boolean => {
     setError(null);
     if (!isVerifiedProfile) {
-      openAuthModal();
+      if (!user) openAuthModal();
+      else {
+        setError(
+          locale === "ar"
+            ? "يرجى استكمال الاسم ورقم الموبايل أولاً."
+            : "Please complete your name and Egyptian phone number first."
+        );
+      }
       return false;
     }
     if (items.length === 0) {
       setError(t.checkout.emptyCart);
       return false;
     }
+    if (!governorate) {
+      setError(
+        locale === "ar"
+          ? "يرجى اختيار المحافظة."
+          : "Please select your governorate."
+      );
+      return false;
+    }
     if (formRef.current && !formRef.current.reportValidity()) {
       return false;
     }
-    if (!receiptPath) {
-      setError("Please upload your transfer receipt screenshot.");
+    if (isTransferMode && !receiptPath) {
+      setError(
+        locale === "ar"
+          ? "يرجى رفع صورة إيصال التحويل."
+          : "Please upload your transfer receipt screenshot."
+      );
       return false;
     }
-    if (senderPhone && !EGYPT_MOBILE_REGEX.test(senderPhone.trim())) {
+    if (isTransferMode && senderPhone && !EGYPT_MOBILE_REGEX.test(senderPhone.trim())) {
       setError("Sender phone must be a valid Egyptian mobile (01XXXXXXXXX).");
       return false;
     }
@@ -197,7 +242,7 @@ export function CheckoutClient() {
   };
 
   const submitOrder = async () => {
-    if (!validateBeforeSubmit() || !receiptPath) return;
+    if (!validateBeforeSubmit()) return;
 
     setSubmitting(true);
     try {
@@ -211,12 +256,16 @@ export function CheckoutClient() {
             colorName: item.colorNameEn || item.colorNameAr || undefined,
             quantity: item.quantity,
           })),
+          paymentMode,
           paymentMethod,
-          receiptPath,
-          senderPhone: senderPhone.trim() || undefined,
-          transactionRef: transactionRef.trim() || undefined,
+          receiptPath: isTransferMode ? receiptPath : undefined,
+          senderPhone: isTransferMode ? senderPhone.trim() || undefined : undefined,
+          transactionRef: isTransferMode
+            ? transactionRef.trim() || undefined
+            : undefined,
+          governorate,
+          city: getGovernorateLabel(governorate, "en"),
           shippingAddress: shippingAddress.trim(),
-          city: city.trim(),
           notes: notes.trim() || undefined,
         }),
       });
@@ -227,7 +276,6 @@ export function CheckoutClient() {
         return;
       }
 
-      // Notify Telegram via protected server route if server-side dispatch did not confirm
       if (data.order?.id && !data.order.telegram_notified) {
         try {
           const notifyRes = await fetch("/api/orders/notify", {
@@ -335,20 +383,37 @@ export function CheckoutClient() {
                   <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#D4AF37]" />
                   <div>
                     <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-                      {t.checkout.authRequiredTitle}
+                      {needsProfileCompletion
+                        ? locale === "ar"
+                          ? "أكمل الاسم ورقم الموبايل أولاً"
+                          : "Complete Name & Phone to Continue"
+                        : t.checkout.authRequiredTitle}
                     </h2>
                     <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                      {t.checkout.authRequiredDesc}
+                      {needsProfileCompletion
+                        ? locale === "ar"
+                          ? "حساب جوجل مسجل بالفعل — فقط أضف الاسم ورقم الموبايل المصري لتأكيد طلبك."
+                          : "Your account is signed in — add your full name and Egyptian mobile number before placing an order."
+                        : t.checkout.authRequiredDesc}
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={openAuthModal}
-                  className="shrink-0 rounded-xl bg-[#D4AF37] px-5 py-2.5 text-xs font-semibold text-[#09090B]"
-                >
-                  {t.checkout.openAuth}
-                </button>
+                {needsProfileCompletion ? (
+                  <Link
+                    href="/complete-profile?next=/checkout"
+                    className="shrink-0 rounded-xl bg-[#D4AF37] px-5 py-2.5 text-xs font-semibold text-[#09090B]"
+                  >
+                    {locale === "ar" ? "استكمال البيانات" : "Complete Profile"}
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={openAuthModal}
+                    className="shrink-0 rounded-xl bg-[#D4AF37] px-5 py-2.5 text-xs font-semibold text-[#09090B]"
+                  >
+                    {t.checkout.openAuth}
+                  </button>
+                )}
               </div>
             )}
 
@@ -364,7 +429,7 @@ export function CheckoutClient() {
               className="mt-8 grid gap-8 lg:grid-cols-12"
             >
               <div className="space-y-8 lg:col-span-7">
-                {/* 1. Delivery Details */}
+                {/* 1. Delivery Details & 27 Egyptian Governorates */}
                 <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-6">
                   <h2 className="text-base font-semibold text-[var(--text-primary)]">
                     {t.checkout.shippingTitle}
@@ -375,13 +440,10 @@ export function CheckoutClient() {
                       <label className="mb-1.5 block text-xs text-[var(--text-secondary)]">
                         {t.checkout.cityLabel}
                       </label>
-                      <input
-                        type="text"
+                      <GovernorateSelector
+                        value={governorate}
+                        onChange={setGovernorate}
                         required
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        placeholder={t.checkout.cityPlaceholder}
-                        className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#D4AF37] focus:outline-none"
                       />
                     </div>
 
@@ -392,6 +454,7 @@ export function CheckoutClient() {
                       <input
                         type="text"
                         required
+                        minLength={6}
                         value={shippingAddress}
                         onChange={(e) => setShippingAddress(e.target.value)}
                         placeholder={t.checkout.addressPlaceholder}
@@ -414,175 +477,246 @@ export function CheckoutClient() {
                   </div>
                 </section>
 
-                {/* 2. Vodafone Cash / InstaPay */}
+                {/* 2. Strict Radio Payment Option (10% Deposit vs 100% COD) */}
                 <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-6">
                   <h2 className="text-base font-semibold text-[var(--text-primary)]">
-                    {t.checkout.paymentTitle}
+                    {t.checkout.paymentModeTitle}
                   </h2>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {(
-                      [
-                        {
-                          id: "vodafone_cash" as PaymentMethod,
-                          label: t.checkout.vodafoneCash,
-                          number: VODAFONE_CASH_NUMBER,
-                        },
-                        {
-                          id: "instapay" as PaymentMethod,
-                          label: t.checkout.instapay,
-                          number: INSTAPAY_NUMBER,
-                        },
-                      ] as const
-                    ).map((opt) => {
-                      const active = paymentMethod === opt.id;
-                      return (
-                        <div
-                          key={opt.id}
-                          onClick={() => setPaymentMethod(opt.id)}
-                          className={`cursor-pointer rounded-xl border p-4 transition-colors ${
-                            active
-                              ? "border-[#D4AF37] bg-[#D4AF37]/10"
-                              : "border-[var(--border-subtle)] hover:border-[#D4AF37]/60"
-                          }`}
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
-                              <Smartphone className="h-4 w-4 text-[#D4AF37]" />
-                              {opt.label}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={(ev) => {
-                                ev.stopPropagation();
-                                handleCopy(opt.number, opt.id);
-                              }}
-                              className="inline-flex items-center gap-1 rounded-xl border border-[#D4AF37]/60 px-2.5 py-1 text-[11px] font-semibold text-[var(--accent-gold-ink)] hover:bg-[#D4AF37] hover:text-[#09090B]"
-                            >
-                              {copiedKey === opt.id ? (
-                                <>
-                                  <Check className="h-3 w-3" />
-                                  {t.checkout.copied}
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-3 w-3" />
-                                  {t.checkout.copyNumber}
-                                </>
-                              )}
-                            </button>
-                          </div>
-                          <p className="mt-2 font-mono text-base font-bold tracking-wider text-[var(--accent-gold-ink)]">
-                            {opt.number}
-                          </p>
+                  <div className="mt-4 space-y-3" role="radiogroup">
+                    <label
+                      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
+                        paymentMode === "full_transfer"
+                          ? "border-[#D4AF37] bg-[#D4AF37]/10"
+                          : "border-[var(--border-subtle)] hover:border-[#D4AF37]/60"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="paymentMode"
+                        value="full_transfer"
+                        checked={paymentMode === "full_transfer"}
+                        onChange={() => setPaymentMode("full_transfer")}
+                        className="mt-1 h-4 w-4 accent-[#D4AF37]"
+                      />
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-[var(--text-primary)]">
+                            {t.checkout.deposit10Option}
+                          </span>
+                          <span className="font-mono text-xs font-bold text-[var(--accent-gold-ink)]">
+                            {subtotal} {t.shop.egp}
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  <p className="mt-4 text-xs text-[var(--text-secondary)]">
-                    {t.checkout.transferTo}{" "}
-                    <span className="font-mono font-bold text-[var(--accent-gold-ink)]">
-                      {activeTargetNumber}
-                    </span>
-                  </p>
-
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1.5 block text-xs text-[var(--text-secondary)]">
-                        {t.checkout.senderPhoneLabel}
-                      </label>
-                      <input
-                        type="tel"
-                        value={senderPhone}
-                        onChange={(e) =>
-                          setSenderPhone(e.target.value.replace(/[^\d]/g, ""))
-                        }
-                        placeholder={t.checkout.senderPhonePlaceholder}
-                        className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#D4AF37] focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-1.5 block text-xs text-[var(--text-secondary)]">
-                        {t.checkout.txRefLabel}
-                      </label>
-                      <input
-                        type="text"
-                        value={transactionRef}
-                        onChange={(e) => setTransactionRef(e.target.value)}
-                        placeholder={t.checkout.txRefPlaceholder}
-                        className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#D4AF37] focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* 3. Receipt Upload */}
-                  <div className="mt-6">
-                    <label className="mb-2 block text-xs font-semibold text-[var(--text-primary)]">
-                      {t.checkout.receiptLabel}
+                        <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                          {t.checkout.deposit10Desc}
+                        </p>
+                      </div>
                     </label>
-                    {!user ? (
-                      <button
-                        type="button"
-                        onClick={openAuthModal}
-                        className="flex w-full cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#D4AF37]/60 bg-[#D4AF37]/5 p-6 text-center transition-colors hover:border-[#D4AF37]"
-                      >
-                        <Upload className="mb-2 h-5 w-5 text-[#D4AF37]" />
-                        <span className="text-xs font-semibold text-[var(--accent-gold-ink)]">
-                          {t.checkout.signInToUpload}
-                        </span>
-                      </button>
-                    ) : (
-                      <label
-                        className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center transition-colors ${
-                          receiptPath
-                            ? "border-[#D4AF37] bg-[#D4AF37]/10"
-                            : "border-[var(--border-strong)] hover:border-[#D4AF37]"
-                        }`}
-                      >
-                        <Upload className="mb-2 h-5 w-5 text-[#D4AF37]" />
-                        <span className="text-xs font-semibold text-[var(--text-primary)]">
-                          {uploading
-                            ? t.checkout.uploadingReceipt
-                            : receiptPath
-                              ? t.checkout.receiptUploaded
-                              : t.checkout.receiptHint}
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
-                          disabled={uploading}
-                          onChange={handleReceiptChange}
-                          className="hidden"
-                        />
-                      </label>
-                    )}
 
-                    {receiptPreview && (
-                      <div className="mt-3 flex items-start gap-3">
-                        <div className="relative h-36 w-36 overflow-hidden rounded-xl border border-[#D4AF37]/50 sm:h-40 sm:w-40">
-                          <Image
-                            src={receiptPreview}
-                            alt="Transfer Receipt Preview"
-                            fill
-                            unoptimized
-                            className="object-cover"
+                    <label
+                      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
+                        paymentMode === "full_cod"
+                          ? "border-[#D4AF37] bg-[#D4AF37]/10"
+                          : "border-[var(--border-subtle)] hover:border-[#D4AF37]/60"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="paymentMode"
+                        value="full_cod"
+                        checked={paymentMode === "full_cod"}
+                        onChange={() => setPaymentMode("full_cod")}
+                        className="mt-1 h-4 w-4 accent-[#D4AF37]"
+                      />
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--text-primary)]">
+                            <Banknote className="h-4 w-4 text-[#D4AF37]" />
+                            {t.checkout.fullCodOption}
+                          </span>
+                          <span className="font-mono text-xs font-bold text-[var(--accent-gold-ink)]">
+                            {subtotal} {t.shop.egp} COD
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                          {t.checkout.fullCodDesc}
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Transfer & Receipt Upload (Hidden completely for 100% COD) */}
+                  {isTransferMode && (
+                    <div className="mt-6 border-t border-[var(--border-subtle)] pt-5">
+                      <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                        {t.checkout.paymentTitle}
+                      </h3>
+
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        {(
+                          [
+                            {
+                              id: "vodafone_cash" as PaymentMethod,
+                              label: t.checkout.vodafoneCash,
+                              number: VODAFONE_CASH_NUMBER,
+                            },
+                            {
+                              id: "instapay" as PaymentMethod,
+                              label: t.checkout.instapay,
+                              number: INSTAPAY_NUMBER,
+                            },
+                          ] as const
+                        ).map((opt) => {
+                          const active = paymentMethod === opt.id;
+                          return (
+                            <div
+                              key={opt.id}
+                              onClick={() => setPaymentMethod(opt.id)}
+                              className={`cursor-pointer rounded-xl border p-4 transition-colors ${
+                                active
+                                  ? "border-[#D4AF37] bg-[#D4AF37]/10"
+                                  : "border-[var(--border-subtle)] hover:border-[#D4AF37]/60"
+                              }`}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+                                  <Smartphone className="h-4 w-4 text-[#D4AF37]" />
+                                  {opt.label}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(ev) => {
+                                    ev.stopPropagation();
+                                    handleCopy(opt.number, opt.id);
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-xl border border-[#D4AF37]/60 px-2.5 py-1 text-[11px] font-semibold text-[var(--accent-gold-ink)] hover:bg-[#D4AF37] hover:text-[#09090B]"
+                                >
+                                  {copiedKey === opt.id ? (
+                                    <>
+                                      <Check className="h-3 w-3" />
+                                      {t.checkout.copied}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="h-3 w-3" />
+                                      {t.checkout.copyNumber}
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                              <p className="mt-2 font-mono text-base font-bold tracking-wider text-[var(--accent-gold-ink)]">
+                                {opt.number}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <p className="mt-4 text-xs text-[var(--text-secondary)]">
+                        {t.checkout.transferTo}{" "}
+                        <span className="font-mono font-bold text-[var(--accent-gold-ink)]">
+                          {subtotal} {t.shop.egp} → {activeTargetNumber}
+                        </span>
+                      </p>
+
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1.5 block text-xs text-[var(--text-secondary)]">
+                            {t.checkout.senderPhoneLabel}
+                          </label>
+                          <input
+                            type="tel"
+                            value={senderPhone}
+                            onChange={(e) =>
+                              setSenderPhone(e.target.value.replace(/[^\d]/g, ""))
+                            }
+                            placeholder={t.checkout.senderPhonePlaceholder}
+                            className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#D4AF37] focus:outline-none"
                           />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setReceiptPath(null);
-                            setReceiptPreview(null);
-                          }}
-                          className="rounded-xl border border-[var(--border-subtle)] px-3 py-1.5 text-[11px] font-medium text-[var(--text-secondary)] hover:border-[#D4AF37] hover:text-[var(--text-primary)]"
-                        >
-                          {t.cart.remove}
-                        </button>
+
+                        <div>
+                          <label className="mb-1.5 block text-xs text-[var(--text-secondary)]">
+                            {t.checkout.txRefLabel}
+                          </label>
+                          <input
+                            type="text"
+                            value={transactionRef}
+                            onChange={(e) => setTransactionRef(e.target.value)}
+                            placeholder={t.checkout.txRefPlaceholder}
+                            className="w-full rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#D4AF37] focus:outline-none"
+                          />
+                        </div>
                       </div>
-                    )}
-                  </div>
+
+                      <div className="mt-6">
+                        <label className="mb-2 block text-xs font-semibold text-[var(--text-primary)]">
+                          {t.checkout.receiptLabel}
+                        </label>
+                        {!user ? (
+                          <button
+                            type="button"
+                            onClick={openAuthModal}
+                            className="flex w-full cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#D4AF37]/60 bg-[#D4AF37]/5 p-6 text-center transition-colors hover:border-[#D4AF37]"
+                          >
+                            <Upload className="mb-2 h-5 w-5 text-[#D4AF37]" />
+                            <span className="text-xs font-semibold text-[var(--accent-gold-ink)]">
+                              {t.checkout.signInToUpload}
+                            </span>
+                          </button>
+                        ) : (
+                          <label
+                            className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center transition-colors ${
+                              receiptPath
+                                ? "border-[#D4AF37] bg-[#D4AF37]/10"
+                                : "border-[var(--border-strong)] hover:border-[#D4AF37]"
+                            }`}
+                          >
+                            <Upload className="mb-2 h-5 w-5 text-[#D4AF37]" />
+                            <span className="text-xs font-semibold text-[var(--text-primary)]">
+                              {uploading
+                                ? t.checkout.uploadingReceipt
+                                : receiptPath
+                                  ? t.checkout.receiptUploaded
+                                  : t.checkout.receiptHint}
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
+                              disabled={uploading}
+                              onChange={handleReceiptChange}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+
+                        {receiptPreview && (
+                          <div className="mt-3 flex items-start gap-3">
+                            <div className="relative h-36 w-36 overflow-hidden rounded-xl border border-[#D4AF37]/50 sm:h-40 sm:w-40">
+                              <Image
+                                src={receiptPreview}
+                                alt="Transfer Receipt Preview"
+                                fill
+                                unoptimized
+                                className="object-cover"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReceiptPath(null);
+                                setReceiptPreview(null);
+                              }}
+                              className="rounded-xl border border-[var(--border-subtle)] px-3 py-1.5 text-[11px] font-medium text-[var(--text-secondary)] hover:border-[#D4AF37] hover:text-[var(--text-primary)]"
+                            >
+                              {t.cart.remove}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </section>
               </div>
 
@@ -621,6 +755,31 @@ export function CheckoutClient() {
                       </div>
                     ))}
                   </div>
+
+                  <div className="mt-4 space-y-2 border-b border-[var(--border-subtle)] pb-4 text-xs">
+                    <div className="flex items-center justify-between text-[var(--text-secondary)]">
+                      <span>{t.cart.subtotal}</span>
+                      <span className="font-mono font-semibold text-[var(--text-primary)]">
+                        {subtotal} {t.shop.egp}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[var(--accent-gold-ink)]">
+                      <span>{t.checkout.depositDueNow}</span>
+                      <span className="font-mono font-bold">
+                        {paidNowAmount} {t.shop.egp}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[var(--text-primary)]">
+                      <span>{t.checkout.remainingCodDue}</span>
+                      <span className="font-mono font-bold">
+                        {remainingCodAmount} {t.shop.egp}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="mt-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] p-3 text-[11px] leading-relaxed text-[var(--text-secondary)]">
+                    {t.policy.shippingNote}
+                  </p>
 
                   <div className="mt-4 flex items-center justify-between">
                     <span className="text-sm text-[var(--text-secondary)]">

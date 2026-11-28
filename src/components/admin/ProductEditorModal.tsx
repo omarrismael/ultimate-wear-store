@@ -22,6 +22,7 @@ export interface ProductFormState {
   price_egp: string;
   compare_at_price_egp: string;
   sizes: ProductSize[];
+  size_stock: Partial<Record<ProductSize, number>>;
   image_url: string;
   colors: ProductColorVariant[];
   is_featured: boolean;
@@ -101,22 +102,34 @@ export function ProductEditorModal({
     }
   };
 
-  const handleColorImageUpload = async (
+  const handleColorSlotUpload = async (
     variantId: string,
+    slot: "front_image_url" | "back_image_url" | "detail_image_url" | "gallery",
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    setUploadingTarget(variantId);
+    setUploadingTarget(`${variantId}:${slot}`);
     try {
       const url = await uploadProductPhoto(file);
       if (url) {
         onChange((prev) => ({
           ...prev,
-          colors: prev.colors.map((c) =>
-            c.id === variantId ? { ...c, image_url: url } : c
-          ),
+          colors: prev.colors.map((c) => {
+            if (c.id !== variantId) return c;
+            if (slot === "gallery") {
+              return {
+                ...c,
+                gallery_urls: [...(c.gallery_urls || []), url].slice(0, 6),
+              };
+            }
+            return {
+              ...c,
+              [slot]: url,
+              ...(slot === "front_image_url" ? { image_url: url } : {}),
+            };
+          }),
         }));
       }
     } finally {
@@ -134,11 +147,25 @@ export function ProductEditorModal({
     });
   };
 
+  const updateSizeStock = (sz: ProductSize, raw: string) => {
+    const val = raw.trim() === "" ? undefined : Math.max(0, Math.floor(Number(raw) || 0));
+    onChange((prev) => {
+      const nextStock = { ...prev.size_stock };
+      if (val === undefined) {
+        delete nextStock[sz];
+      } else {
+        nextStock[sz] = val;
+      }
+      return { ...prev, size_stock: nextStock };
+    });
+  };
+
   const addColorSkin = (preset?: {
     name_en: string;
     name_ar: string;
     hex: string;
   }) => {
+    const defaultImg = form.image_url || "/images/hoodies/obsidian-crest.jpg";
     const newSkin: ProductColorVariant = {
       id: `skin-${Date.now().toString(36)}-${Math.random()
         .toString(36)
@@ -146,7 +173,11 @@ export function ProductEditorModal({
       name_en: preset?.name_en || "Limited Color",
       name_ar: preset?.name_ar || "لون خاص",
       hex: preset?.hex || "#27272A",
-      image_url: form.image_url || "/images/hoodies/obsidian-crest.jpg",
+      image_url: defaultImg,
+      front_image_url: defaultImg,
+      back_image_url: "",
+      detail_image_url: "",
+      gallery_urls: [],
     };
     onChange((prev) => ({
       ...prev,
@@ -370,27 +401,47 @@ export function ProductEditorModal({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-3">
             <div>
               <label className="mb-1.5 block text-xs text-[var(--text-secondary)]">
-                Sizes
+                {locale === "ar"
+                  ? "المقاسات المتاحة والمخزون الاختياري (S → 3XL)"
+                  : "Size Matrix & Optional Per-Size Stock (S → 3XL)"}
               </label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                 {PRODUCT_SIZES.map((sz) => {
                   const active = form.sizes.includes(sz);
                   return (
-                    <button
+                    <div
                       key={sz}
-                      type="button"
-                      onClick={() => toggleSize(sz)}
-                      className={`rounded-xl border px-3.5 py-1.5 text-xs font-semibold ${
+                      className={`rounded-xl border p-2 transition-colors ${
                         active
-                          ? "border-[#D4AF37] bg-[#D4AF37] text-[#09090B]"
-                          : "border-[var(--border-subtle)] text-[var(--text-secondary)]"
+                          ? "border-[#D4AF37] bg-[#D4AF37]/10"
+                          : "border-[var(--border-subtle)] bg-[var(--bg-page)]"
                       }`}
                     >
-                      {sz}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleSize(sz)}
+                        className={`w-full rounded-lg py-1 text-xs font-bold ${
+                          active
+                            ? "bg-[#D4AF37] text-[#09090B]"
+                            : "text-[var(--text-secondary)]"
+                        }`}
+                      >
+                        {sz}
+                      </button>
+                      {active && (
+                        <input
+                          type="number"
+                          min={0}
+                          placeholder={locale === "ar" ? "الكمية" : "Qty"}
+                          value={form.size_stock[sz] ?? ""}
+                          onChange={(e) => updateSizeStock(sz, e.target.value)}
+                          className="mt-1.5 w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-1.5 py-1 text-center font-mono text-[11px] text-[var(--text-primary)] focus:border-[#D4AF37] focus:outline-none"
+                        />
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -549,53 +600,158 @@ export function ProductEditorModal({
                       </button>
                     </div>
 
-                    <div className="mt-2.5 flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[#111114]">
-                        <Image
-                          src={skin.image_url || form.image_url}
-                          alt={skin.name_en}
-                          fill
-                          unoptimized
-                          sizes="40px"
-                          className="object-cover"
-                        />
-                      </div>
-                      <input
-                        type="text"
-                        value={skin.image_url}
-                        placeholder={`/images/hoodies/... (Skin #${idx + 1})`}
-                        onChange={(e) =>
-                          updateColorField(skin.id, {
-                            image_url: e.target.value,
-                          })
-                        }
-                        className="flex-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] px-2.5 py-1.5 text-[11px] text-[var(--text-primary)] focus:border-[#D4AF37] focus:outline-none"
-                      />
-                      <label className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-[#D4AF37]/50 px-3 py-1.5 text-[11px] font-semibold text-[var(--accent-gold-ink)] hover:bg-[#D4AF37] hover:text-[#09090B]">
-                        <Upload className="h-3 w-3" />
+                    {/* Structured Image Slots per Color Variant: Front / Back / Detail / Gallery */}
+                    <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+                      {(
+                        [
+                          {
+                            slot: "front_image_url" as const,
+                            labelEn: "1. Front View",
+                            labelAr: "1. صورة الوش",
+                            value: skin.front_image_url || skin.image_url || "",
+                          },
+                          {
+                            slot: "back_image_url" as const,
+                            labelEn: "2. Back View",
+                            labelAr: "2. صورة الضهر",
+                            value: skin.back_image_url || "",
+                          },
+                          {
+                            slot: "detail_image_url" as const,
+                            labelEn: "3. Detail / Close-up",
+                            labelAr: "3. تفصيلة المنتج",
+                            value: skin.detail_image_url || "",
+                          },
+                        ] as const
+                      ).map((item) => (
+                        <div
+                          key={item.slot}
+                          className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-page)] p-2.5"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-semibold text-[var(--text-primary)]">
+                              {locale === "ar" ? item.labelAr : item.labelEn}
+                            </span>
+                            {item.slot === "front_image_url" && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onChange((p) => ({
+                                    ...p,
+                                    image_url: item.value || skin.image_url,
+                                  }))
+                                }
+                                className="text-[9px] font-semibold text-[var(--accent-gold-ink)] hover:underline"
+                              >
+                                {locale === "ar" ? "تعيين كأساسية" : "Set Cover"}
+                              </button>
+                            )}
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[#111114]">
+                              {item.value ? (
+                                <Image
+                                  src={item.value}
+                                  alt={`${skin.name_en} ${item.labelEn}`}
+                                  fill
+                                  unoptimized
+                                  sizes="40px"
+                                  className="object-cover"
+                                />
+                              ) : (
+                                <span className="flex h-full w-full items-center justify-center text-[9px] text-white/40">
+                                  —
+                                </span>
+                              )}
+                            </div>
+                            <label className="inline-flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg border border-[#D4AF37]/50 px-2 py-1.5 text-[10px] font-semibold text-[var(--accent-gold-ink)] hover:bg-[#D4AF37] hover:text-[#09090B]">
+                              <Upload className="h-3 w-3" />
+                              <span>
+                                {uploadingTarget === `${skin.id}:${item.slot}`
+                                  ? "..."
+                                  : locale === "ar"
+                                    ? "رفع"
+                                    : "Upload"}
+                              </span>
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                onChange={(e) =>
+                                  handleColorSlotUpload(skin.id, item.slot, e)
+                                }
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+                          <input
+                            type="text"
+                            value={item.value}
+                            placeholder={`/images/... (#${idx + 1})`}
+                            onChange={(e) => {
+                              const nextUrl = e.target.value;
+                              updateColorField(skin.id, {
+                                [item.slot]: nextUrl,
+                                ...(item.slot === "front_image_url"
+                                  ? { image_url: nextUrl }
+                                  : {}),
+                              });
+                            }}
+                            className="mt-1.5 w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-1 text-[10px] text-[var(--text-primary)] focus:border-[#D4AF37] focus:outline-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Optional Extra Gallery Shots */}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] px-2.5 py-1 text-[10px] font-medium text-[var(--text-secondary)] hover:border-[#D4AF37] hover:text-[var(--text-primary)]">
+                        <Plus className="h-3 w-3 text-[#D4AF37]" />
                         <span>
-                          {uploadingTarget === skin.id
+                          {uploadingTarget === `${skin.id}:gallery`
                             ? "..."
                             : locale === "ar"
-                              ? "صورة اللون"
-                              : "Upload Skin"}
+                              ? "إضافة صورة معرض إضافية"
+                              : "Add Extra Gallery Shot"}
                         </span>
                         <input
                           type="file"
                           accept="image/png,image/jpeg,image/webp"
-                          onChange={(e) => handleColorImageUpload(skin.id, e)}
+                          onChange={(e) =>
+                            handleColorSlotUpload(skin.id, "gallery", e)
+                          }
                           className="hidden"
                         />
                       </label>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onChange((p) => ({ ...p, image_url: skin.image_url }))
-                        }
-                        className="rounded-lg border border-[var(--border-subtle)] px-2.5 py-1.5 text-[10px] font-medium text-[var(--text-secondary)] hover:border-[#D4AF37] hover:text-[var(--text-primary)]"
-                      >
-                        {locale === "ar" ? "تعيين كأساسية" : "Set Cover"}
-                      </button>
+                      {Array.isArray(skin.gallery_urls) &&
+                        skin.gallery_urls.map((gUrl, gIdx) => (
+                          <div
+                            key={`${skin.id}-gal-${gIdx}`}
+                            className="relative h-8 w-8 overflow-hidden rounded-md border border-[#D4AF37]/40"
+                          >
+                            <Image
+                              src={gUrl}
+                              alt="Gallery shot"
+                              fill
+                              unoptimized
+                              sizes="32px"
+                              className="object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateColorField(skin.id, {
+                                  gallery_urls: (skin.gallery_urls || []).filter(
+                                    (_, i) => i !== gIdx
+                                  ),
+                                })
+                              }
+                              aria-label="Remove gallery shot"
+                              className="absolute inset-0 flex items-center justify-center bg-black/60 text-[10px] text-white opacity-0 hover:opacity-100"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
                     </div>
                   </div>
                 ))}

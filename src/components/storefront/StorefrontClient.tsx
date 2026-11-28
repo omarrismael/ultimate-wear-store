@@ -30,9 +30,10 @@ export function StorefrontClient({
   settings?: StoreSettings;
 }) {
   const { loading: authLoading } = useAuth();
-  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(
-    null
-  );
+  const [quickViewState, setQuickViewState] = useState<{
+    product: Product;
+    colorIndex: number;
+  } | null>(null);
   const [activeCategory, setActiveCategory] = useState<
     "all" | ProductCategory
   >("all");
@@ -70,7 +71,9 @@ export function StorefrontClient({
           featuredProducts={heroProducts}
           sections={sections}
           settings={settings}
-          onQuickView={(product) => setQuickViewProduct(product)}
+          onQuickView={(product) =>
+            setQuickViewState({ product, colorIndex: 0 })
+          }
           onSelectCategory={(cat) => setActiveCategory(cat)}
         />
         <Suspense fallback={<BrandLoader label="ULTIMATE // COLLECTION" />}>
@@ -80,16 +83,19 @@ export function StorefrontClient({
             settings={settings}
             activeCategory={activeCategory}
             onCategoryChange={setActiveCategory}
-            onQuickView={(product) => setQuickViewProduct(product)}
+            onQuickView={(product, colorIndex = 0) =>
+              setQuickViewState({ product, colorIndex })
+            }
           />
         </Suspense>
         <AboutSection />
       </main>
       <Footer />
       <QuickViewModal
-        product={quickViewProduct}
+        product={quickViewState?.product ?? null}
+        initialColorIndex={quickViewState?.colorIndex ?? 0}
         sections={sections}
-        onClose={() => setQuickViewProduct(null)}
+        onClose={() => setQuickViewState(null)}
       />
     </div>
   );

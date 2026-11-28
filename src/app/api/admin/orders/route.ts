@@ -14,9 +14,13 @@ export async function GET(request: NextRequest) {
 
   if (
     statusFilter &&
-    ["pending_verification", "confirmed", "shipped", "cancelled"].includes(
-      statusFilter
-    )
+    [
+      "pending_verification",
+      "confirmed",
+      "shipped",
+      "delivered",
+      "cancelled",
+    ].includes(statusFilter)
   ) {
     query = query.eq("status", statusFilter);
   }
@@ -28,6 +32,12 @@ export async function GET(request: NextRequest) {
 
   const enriched: Order[] = await Promise.all(
     ((orders || []) as Order[]).map(async (order) => {
+      if (
+        !order.receipt_path ||
+        order.receipt_path.endsWith("/cod-no-receipt")
+      ) {
+        return { ...order, receipt_signed_url: null };
+      }
       const { data: signed } = await supabase.storage
         .from("payment-receipts")
         .createSignedUrl(order.receipt_path, 3600);

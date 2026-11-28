@@ -9,9 +9,10 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ElectricLoader } from "@/components/brand/ElectricLoader";
+import { OrderReceiptCard } from "@/components/orders/OrderReceiptCard";
 
 export default function OrdersPage() {
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
   const { user, openAuthModal } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +43,7 @@ export default function OrdersPage() {
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg-page)] transition-colors duration-300">
       <Navbar />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-3 py-8 min-[400px]:px-4 sm:px-6 sm:py-12 lg:px-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-3 py-8 min-[400px]:px-4 sm:px-6 sm:py-12 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-extrabold uppercase tracking-tight text-[var(--text-primary)] sm:text-3xl">
@@ -83,50 +84,9 @@ export default function OrdersPage() {
             </p>
           </div>
         ) : (
-          <div className="mt-8 space-y-5">
-            {orders.map((order) => (
-              <div
-                key={order.id}
-                className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-5"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
-                  <div>
-                    <p className="font-mono text-sm font-bold text-[var(--accent-gold-ink)]">
-                      {order.order_code}
-                    </p>
-                    <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                      {new Date(order.created_at).toLocaleString()}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                    <span className="rounded-xl border border-[#D4AF37]/50 bg-[#D4AF37]/10 px-3 py-1 text-xs font-semibold text-[var(--accent-gold-ink)]">
-                      {t.orders.status[order.status]}
-                    </span>
-                    <span className="font-mono text-sm font-bold text-[var(--text-primary)]">
-                      {order.total_amount} {t.shop.egp}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-3 space-y-1.5 text-xs text-[var(--text-secondary)]">
-                  {order.order_items?.map((item) => (
-                    <div key={item.id} className="flex justify-between gap-3">
-                      <span className="min-w-0">
-                        {locale === "ar"
-                          ? item.product_title_ar
-                          : item.product_title_en}{" "}
-                        ({item.size}
-                        {item.color_name ? ` · ${item.color_name}` : ""}) ×{" "}
-                        {item.quantity}
-                      </span>
-                      <span className="shrink-0 font-mono">
-                        {item.unit_price * item.quantity} {t.shop.egp}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          <div className="mt-10 grid gap-8 md:grid-cols-2 xl:grid-cols-3">
+            {orders.map((order, idx) => (
+              <OrderReceiptCard key={order.id} order={order} index={idx} />
             ))}
           </div>
         )}

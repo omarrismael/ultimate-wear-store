@@ -21,7 +21,7 @@ interface ShopSectionProps {
   settings?: StoreSettings;
   activeCategory?: "all" | ProductCategory;
   onCategoryChange?: (cat: "all" | ProductCategory) => void;
-  onQuickView: (product: Product) => void;
+  onQuickView: (product: Product, colorIndex?: number) => void;
 }
 
 export function ShopSection({

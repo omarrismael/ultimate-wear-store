@@ -22,6 +22,7 @@ import { useCart } from "@/components/providers/CartProvider";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useLenis } from "@/components/providers/LenisProvider";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { ReturnPolicyModal } from "@/components/layout/ReturnPolicyModal";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -31,6 +32,7 @@ export function Navbar() {
   const { user, profile, openAuthModal, signOut } = useAuth();
   const { scrollTo } = useLenis();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [policyOpen, setPolicyOpen] = useState(false);
 
   const isHome = pathname === "/";
   const isAdmin = Boolean(
@@ -82,6 +84,13 @@ export function Navbar() {
           >
             {t.nav.about}
           </Link>
+          <button
+            type="button"
+            onClick={() => setPolicyOpen(true)}
+            className="uppercase transition-colors duration-200 hover:text-[#D4AF37]"
+          >
+            {t.nav.policy}
+          </button>
           {user && (
             <Link
               href="/orders"
@@ -217,6 +226,16 @@ export function Navbar() {
             >
               {t.nav.about}
             </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setPolicyOpen(true);
+              }}
+              className="rounded-lg px-2 py-1.5 text-start uppercase hover:bg-[var(--bg-elevated)] hover:text-[#D4AF37]"
+            >
+              {t.nav.policy}
+            </button>
             {user && (
               <Link
                 href="/orders"
@@ -245,6 +264,11 @@ export function Navbar() {
           {toastMessage}
         </div>
       )}
+
+      <ReturnPolicyModal
+        isOpen={policyOpen}
+        onClose={() => setPolicyOpen(false)}
+      />
     </header>
   );
 }

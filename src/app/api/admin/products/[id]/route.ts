@@ -45,10 +45,12 @@ export async function PATCH(
         updateErr.code === "42703" ||
         updateErr.code === "23514" ||
         updateErr.message?.includes("colors") ||
+        updateErr.message?.includes("size_stock") ||
         updateErr.message?.includes("category"))
     ) {
-      const { colors, category, ...rest } = parsed.data;
+      const { colors, size_stock, category, ...rest } = parsed.data;
       void colors;
+      void size_stock;
       const patchFallback: Record<string, unknown> = { ...rest };
       if (category !== undefined) {
         patchFallback.category = BASE_CATEGORIES.has(category)

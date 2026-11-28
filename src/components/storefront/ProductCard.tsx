@@ -12,7 +12,7 @@ interface ProductCardProps {
   product: Product;
   categoryLabel?: string;
   viewMode?: "grid" | "single";
-  onQuickView: (product: Product) => void;
+  onQuickView: (product: Product, colorIndex?: number) => void;
   isHovered?: boolean;
   isDimmed?: boolean;
   onHoverChange?: (hovering: boolean) => void;
@@ -46,7 +46,10 @@ export function ProductCard({
       ? colorVariants[selectedColorIndex] || colorVariants[0]
       : null;
 
-  const activeImage = selectedColor?.image_url || product.image_url;
+  const activeImage =
+    selectedColor?.front_image_url ||
+    selectedColor?.image_url ||
+    product.image_url;
   const title = locale === "ar" ? product.title_ar : product.title_en;
   const description =
     locale === "ar" ? product.description_ar : product.description_en;
@@ -86,7 +89,7 @@ export function ProductCard({
         >
           {/* Image */}
           <div
-            onClick={() => onQuickView(product)}
+            onClick={() => onQuickView(product, selectedColorIndex)}
             className={`group relative cursor-pointer overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[#18181D] ${
               isSingle
                 ? "aspect-[4/5] w-full shrink-0 sm:aspect-[4/5] sm:w-56 md:w-64"
@@ -120,7 +123,7 @@ export function ProductCard({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                onQuickView(product);
+                onQuickView(product, selectedColorIndex);
               }}
               aria-label={t.shop.quickView}
               className="absolute bottom-1.5 end-1.5 inline-flex items-center gap-1 rounded-full border border-[#FFFFFF]/25 bg-[#111114]/85 px-2 py-1 text-[9px] font-medium text-[#FFFFFF] backdrop-blur-sm transition-all duration-200 hover:border-[#D4AF37] hover:text-[#D4AF37] active:scale-95 sm:bottom-3 sm:end-3 sm:gap-1.5 sm:px-3.5 sm:py-1.5 sm:text-[11px]"
@@ -186,6 +189,7 @@ export function ProductCard({
                         key={variant.id}
                         type="button"
                         onClick={() => setSelectedColorIndex(idx)}
+                        onMouseEnter={() => setSelectedColorIndex(idx)}
                         title={colorLabel}
                         aria-label={colorLabel}
                         className={`relative h-5 w-5 rounded-full border transition-all duration-200 active:scale-90 sm:h-5.5 sm:w-5.5 ${

@@ -8,7 +8,8 @@ import {
   RATE_LIMITS,
 } from "@/lib/security/rate-limit";
 import { sendOrderTelegramNotification } from "@/lib/telegram/notify";
-import type { Order, OrderItem, Product } from "@/types";
+import { resolveGovernorate } from "@/lib/egypt-governorates";
+import type { Order, OrderItem, Product, ProductSize } from "@/types";
 
 export async function GET() {
   try {
@@ -128,13 +129,16 @@ export async function POST(request: NextRequest) {
     }
 
     const input = parsed.data;
+    const isTransferMode = input.paymentMode === "full_transfer";
 
-    // Ensure uploaded receipt belongs strictly to the authenticated user's folder
-    if (!input.receiptPath.startsWith(`${user.id}/`)) {
-      return NextResponse.json(
-        { error: "Invalid receipt ownership path." },
-        { status: 403 }
-      );
+    // Ensure uploaded receipt belongs strictly to the authenticated user's folder when transfer mode is active
+    if (isTransferMode) {
+      if (!input.receiptPath || !input.receiptPath.startsWith(`${user.id}/`)) {
+        return NextResponse.json(
+          { error: "Invalid receipt ownership path." },
+          { status: 403 }
+        );
+      }
     }
 
     // Fetch authoritative product records from Postgres (never trust client prices)
@@ -163,7 +167,7 @@ export async function POST(request: NextRequest) {
       product_id: string;
       product_title_en: string;
       product_title_ar: string;
-      size: "S" | "M" | "L" | "XL";
+      size: ProductSize;
       color_name: string | null;
       quantity: number;
       unit_price: number;
@@ -209,26 +213,77 @@ export async function POST(request: NextRequest) {
       new Date().getMonth() + 1
     ).padStart(2, "0")}-${randomCode}`;
 
-    const { data: order, error: orderErr } = await supabase
+    const resolvedGov = resolveGovernorate(input.governorate || input.city);
+    const governorateKey = resolvedGov?.key || input.governorate || null;
+    const displayCity = resolvedGov
+      ? `${resolvedGov.name_en} / ${resolvedGov.name_ar}`
+      : input.city;
+
+    const paidAmount = isTransferMode ? computedTotal : 0;
+    const remainingCodAmount = isTransferMode ? 0 : computedTotal;
+    const receiptPathValue = isTransferMode ? input.receiptPath || null : null;
+
+    const fullOrderPayload = {
+      order_code: orderCode,
+      user_id: user.id,
+      customer_email: profile?.email || user.email || "",
+      customer_phone: resolvedPhone,
+      shipping_address: input.shippingAddress,
+      city: displayCity,
+      governorate: governorateKey,
+      payment_method: input.paymentMethod,
+      payment_mode: input.paymentMode,
+      paid_amount: paidAmount,
+      remaining_cod_amount: remainingCodAmount,
+      sender_phone: isTransferMode ? input.senderPhone || null : null,
+      transaction_ref: isTransferMode ? input.transactionRef || null : null,
+      receipt_path: receiptPathValue,
+      total_amount: computedTotal,
+      status: "pending_verification",
+      notes: input.notes || null,
+      telegram_notified: false,
+    };
+
+    let { data: order, error: orderErr } = await supabase
       .from("orders")
-      .insert({
+      .insert(fullOrderPayload)
+      .select("*")
+      .single();
+
+    // Compatibility fallback if additive payment_mode/governorate columns are not yet migrated
+    if (
+      orderErr &&
+      (orderErr.code === "PGRST204" ||
+        orderErr.code === "42703" ||
+        orderErr.message?.includes("payment_mode") ||
+        orderErr.message?.includes("governorate") ||
+        orderErr.message?.includes("paid_amount") ||
+        orderErr.message?.includes("receipt_path"))
+    ) {
+      const legacyPayload = {
         order_code: orderCode,
         user_id: user.id,
         customer_email: profile?.email || user.email || "",
         customer_phone: resolvedPhone,
         shipping_address: input.shippingAddress,
-        city: input.city,
+        city: displayCity,
         payment_method: input.paymentMethod,
-        sender_phone: input.senderPhone || null,
-        transaction_ref: input.transactionRef || null,
-        receipt_path: input.receiptPath,
+        sender_phone: isTransferMode ? input.senderPhone || null : null,
+        transaction_ref: isTransferMode ? input.transactionRef || null : null,
+        receipt_path: receiptPathValue || `${user.id}/cod-no-receipt`,
         total_amount: computedTotal,
         status: "pending_verification",
         notes: input.notes || null,
         telegram_notified: false,
-      })
-      .select("*")
-      .single();
+      };
+      const retry = await supabase
+        .from("orders")
+        .insert(legacyPayload)
+        .select("*")
+        .single();
+      order = retry.data;
+      orderErr = retry.error;
+    }
 
     if (orderErr || !order) {
       return NextResponse.json(
@@ -272,7 +327,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: itemsErr.message }, { status: 400 });
     }
 
-    const typedOrder = order as Order;
+    const typedOrder: Order = {
+      ...(order as Order),
+      governorate: (order as Order).governorate ?? governorateKey,
+      payment_mode: (order as Order).payment_mode ?? input.paymentMode,
+      paid_amount: (order as Order).paid_amount ?? paidAmount,
+      remaining_cod_amount:
+        (order as Order).remaining_cod_amount ?? remainingCodAmount,
+    };
     const typedItems = ((insertedItems || normalizedItems) as OrderItem[]).map(
       (item, idx) => ({
         ...item,
