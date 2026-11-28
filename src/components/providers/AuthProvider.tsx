@@ -42,6 +42,10 @@ function mergeUserMetadataProfile(
     typeof meta.phone === "string" && meta.phone.trim()
       ? meta.phone.trim()
       : null;
+  const metaGovernorate =
+    typeof meta.governorate === "string" && meta.governorate.trim()
+      ? meta.governorate.trim()
+      : null;
 
   if (!dbProfile) {
     if (!metaPhone && !metaName) return null;
@@ -50,6 +54,7 @@ function mergeUserMetadataProfile(
       email: currentUser.email || "",
       full_name: metaName,
       phone: metaPhone,
+      governorate: metaGovernorate,
       is_admin: false,
       created_at: currentUser.created_at || new Date().toISOString(),
       updated_at: currentUser.updated_at || new Date().toISOString(),
@@ -60,6 +65,7 @@ function mergeUserMetadataProfile(
     ...dbProfile,
     full_name: dbProfile.full_name || metaName,
     phone: dbProfile.phone || metaPhone,
+    governorate: dbProfile.governorate || metaGovernorate,
   };
 }
 

@@ -263,11 +263,55 @@ begin
 end;
 $$;
 
+-- Self-service SECURITY DEFINER profile sync so onboarding never fails on table GRANT drift
+create or replace function public.upsert_own_profile(
+  p_full_name text default null,
+  p_phone text default null,
+  p_governorate text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_email text := coalesce(auth.jwt()->>'email', '');
+  v_name text := nullif(trim(coalesce(p_full_name, '')), '');
+  v_phone text := nullif(trim(coalesce(p_phone, '')), '');
+  v_gov text := nullif(trim(coalesce(p_governorate, '')), '');
+  v_is_owner boolean := lower(v_email) = 'okhatab055@gmail.com';
+begin
+  if v_uid is null then
+    raise exception 'Unauthorized';
+  end if;
+
+  if v_email = '' then
+    select coalesce(email, '') into v_email from auth.users where id = v_uid;
+  end if;
+
+  insert into public.profiles (id, email, full_name, phone, governorate, is_admin)
+  values (v_uid, v_email, v_name, v_phone, v_gov, v_is_owner)
+  on conflict (id) do update
+    set email = coalesce(nullif(excluded.email, ''), public.profiles.email),
+        full_name = coalesce(excluded.full_name, public.profiles.full_name),
+        phone = coalesce(excluded.phone, public.profiles.phone),
+        governorate = coalesce(excluded.governorate, public.profiles.governorate);
+end;
+$$;
+
 -- ----------------------------------------------------------------------------
 -- 3. ROW LEVEL SECURITY (RLS) & EXPLICIT TABLE/FUNCTION GRANTS
 -- ----------------------------------------------------------------------------
 
-grant usage on schema public to anon, authenticated;
+grant usage on schema public to anon, authenticated, service_role;
+
+grant all privileges on public.profiles to postgres, service_role;
+grant all privileges on public.orders to postgres, service_role;
+grant all privileges on public.order_items to postgres, service_role;
+grant all privileges on public.products to postgres, service_role;
+grant all privileges on public.store_sections to postgres, service_role;
+grant all privileges on public.store_settings to postgres, service_role;
 
 grant select on public.products to anon, authenticated;
 grant insert, update, delete on public.products to authenticated;
@@ -284,6 +328,8 @@ grant select, insert, delete on public.order_items to authenticated;
 
 grant execute on function public.is_admin() to anon, authenticated;
 grant execute on function public.mark_order_telegram_notified(uuid) to authenticated;
+revoke all on function public.upsert_own_profile(text, text, text) from public;
+grant execute on function public.upsert_own_profile(text, text, text) to authenticated;
 
 alter table public.profiles enable row level security;
 alter table public.products enable row level security;
